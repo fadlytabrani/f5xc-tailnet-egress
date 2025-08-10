@@ -1,0 +1,83 @@
+tailnet = "primary-tailnet"
+auth_key = "tskey-auth-example-primary-key"
+
+# Multi-tailnet configuration example
+tailnets = [
+  {
+    tailnet_name = "production"
+    tailnet_key = "tskey-auth-kuKti5tjgn11CNTRL-production-key"
+    use_k8s_secret = false
+    services = [
+      {
+        endpoint = "app-server.production.ts.net"
+        protocol = "tcp"
+        port = 80
+        connection_timeout = 10
+        f5xc_origin_pool = "production-app-pool"
+      },
+      {
+        endpoint = "db-server.production.ts.net"
+        protocol = "tcp"
+        port = 5432
+        connection_timeout = 15
+        f5xc_origin_pool = "production-db-pool"
+      },
+      {
+        endpoint = "dns-server.production.ts.net"
+        protocol = "udp"
+        port = 53
+        connection_timeout = 5
+        f5xc_origin_pool = "production-dns-pool"
+      }
+    ]
+  },
+  {
+    tailnet_name = "staging"
+    tailnet_key = "tskey-auth-kuKti5tjgn11CNTRL-staging-key"
+    use_k8s_secret = false
+    services = [
+      {
+        endpoint = "staging-app.staging.ts.net"
+        protocol = "tcp"
+        port = 8080
+        connection_timeout = 10
+        f5xc_origin_pool = "staging-app-pool"
+      },
+      {
+        endpoint = "staging-api.staging.ts.net"
+        protocol = "tcp"
+        port = 3000
+        connection_timeout = 10
+        f5xc_origin_pool = "staging-api-pool"
+      }
+    ]
+  },
+  {
+    tailnet_name = "development"
+    tailnet_key = "tskey-client-oauth-development-key"
+    use_k8s_secret = true
+    services = [
+      {
+        endpoint = "dev-service.development.ts.net"
+        protocol = "tcp"
+        port = 9000
+        connection_timeout = 5
+        f5xc_origin_pool = "development-service-pool"
+      }
+    ]
+  }
+]
+
+# F5 XC Configuration
+f5xc_tenant_name = "my-f5xc-tenant"
+f5xc_api_key = "f5xc-api-key-here"
+
+# Legacy single tailnet services (still supported)
+services = [
+  {
+    protocol = "tcp"
+    ts_node = "legacy-app.primary-tailnet.ts.net"
+    port = 80
+    service_port = 10000
+  }
+]

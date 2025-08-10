@@ -1,0 +1,30 @@
+k8s_namespace = "f-tabrani"
+
+tailnets = [
+  {
+    tailnet_name = "tail40b056"
+    tailnet_key = "tskey-auth-kx9YUSzGoV11CNTRL-YdHqzXpVi5gZACCwM1NQ6gB9bPpWKGboW"
+    use_k8s_secret = true
+    services = [
+      {
+        endpoint = "openspeedtest"
+        protocol = "tcp"
+        port = 3000
+        f5xc_origin_pool = "ost-ts-yunohave-com"
+      }
+    ]
+  },
+  {
+    tailnet_name = "tail88356"
+    tailnet_key = "tskey-auth-kNvE7HnaPV11CNTRL-sGRSW1MXhthuFwnTRG4tshYNYsHEKhD5"
+    use_k8s_secret = true
+    services = [
+      {
+        endpoint = "openspeedtest"
+        protocol = "tcp"
+        port = 3000
+        f5xc_origin_pool = "ost-ts1-yunohave-com"
+      }
+    ]
+  }
+]

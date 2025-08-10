@@ -1,0 +1,18 @@
+%{ if anytrue([for tailnet in tailnets : tailnet.use_k8s_secret]) ~}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tailscale-egress
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames: [
+%{ for tailnet in tailnets ~}
+%{ if tailnet.use_k8s_secret ~}
+    "tailscale-auth-${tailnet.tailnet_name}",
+%{ endif ~}
+%{ endfor ~}
+  ]
+%{ endif ~}

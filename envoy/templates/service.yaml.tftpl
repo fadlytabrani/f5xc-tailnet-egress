@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tailscale-egress
+  labels:
+    app: tailscale-egress
+spec:
+  type: ClusterIP
+  selector:
+    app: tailscale-egress
+  ports:
+%{ for tailnet_index, tailnet in tailnets ~}
+%{ for service_index, service in tailnet.services ~}
+    - name: ${tailnet.tailnet_name}-${service.protocol}-${service_index}
+      protocol: ${upper(service.protocol)}
+      port: ${10000 + (tailnet_index * 1000) + service_index}
+      targetPort: ${10000 + (tailnet_index * 1000) + service_index}
+%{ endfor ~}
+%{ endfor ~}
