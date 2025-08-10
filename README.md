@@ -146,7 +146,7 @@ Example:
 
 ## 🌐 Kubernetes Compatibility
 
-These solutions are designed for standard Kubernetes distributions but can also be deployed on other Kubernetes distributions.
+These solutions are designed for can also be deployed on other standard Kubernetes distributions.
 
 ## 🏢 F5 XC Deployment Options
 
