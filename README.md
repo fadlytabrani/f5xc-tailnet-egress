@@ -11,7 +11,7 @@ A Terraform-based solution to generate manifests for connecting F5 Distributed C
 
 ## 🏗️ Architecture
 
-_[Architecture diagram will be provided as an SVG file]_
+![Architecture Diagram](docs/images/architecture.svg)
 
 ### **🔍 Architecture Components Explained:**
 
