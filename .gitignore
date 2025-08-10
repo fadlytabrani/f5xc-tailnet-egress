@@ -2,6 +2,7 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
+*.tfvars.test
 !terraform.tfvars.example
 !examples/*.tfvars.example
 .terraform/
