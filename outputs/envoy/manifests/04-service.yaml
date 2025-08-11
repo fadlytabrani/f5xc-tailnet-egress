@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tailscale-egress
+  labels:
+    app: tailscale-egress
+spec:
+  type: ClusterIP
+  selector:
+    app: tailscale-egress
+  ports:
+    - name: tail40b056-tcp-0
+      protocol: TCP
+      port: 10000
+      targetPort: 10000
+    - name: tail88356-tcp-0
+      protocol: TCP
+      port: 11000
+      targetPort: 11000

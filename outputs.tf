@@ -24,19 +24,36 @@ output "tailnet_proxy_ports" {
   }
 }
 
-output "f5xc_origin_pools" {
-  description = "F5 XC Origin Pool mappings for services"
-  value = flatten([
+locals {
+  # Create a flat list of all services with their global index
+  all_services = flatten([
     for tailnet_index, tailnet in var.tailnets : [
       for service_index, service in tailnet.services : {
-        f5xc_origin_pool = service.f5xc_origin_pool
+        global_index     = length(flatten([for t in slice(var.tailnets, 0, tailnet_index) : t.services])) + service_index
+        tailnet_index    = tailnet_index
+        service_index    = service_index
         tailnet_name     = tailnet.tailnet_name
         endpoint         = service.endpoint
-        exposed_port     = 10000 + (tailnet_index * 1000) + service_index
-        service_endpoint = "tailscale-egress.${var.k8s_namespace}:${10000 + (tailnet_index * 1000) + service_index}"
+        f5xc_origin_pool = service.f5xc_origin_pool
+        port             = service.port
+        protocol         = service.protocol
       }
     ]
   ])
+}
+
+output "f5xc_origin_pools" {
+  description = "F5 XC Origin Pool mappings for services"
+  value = [
+    for service in local.all_services : {
+      f5xc_origin_pool        = service.f5xc_origin_pool
+      f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
+      tailnet_name            = service.tailnet_name
+      endpoint                = service.endpoint
+      exposed_port            = 10000 + (service.tailnet_index * 1000) + service.service_index
+      service_endpoint        = "tailscale-egress.${var.k8s_namespace}:${10000 + (service.tailnet_index * 1000) + service.service_index}"
+    }
+  ]
 }
 
 output "k8s_namespace" {

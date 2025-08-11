@@ -4,6 +4,10 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -79,11 +83,24 @@ resource "local_file" "envoy_statefulset" {
 
 
 
+# Generate unique suffixes for origin pool names to avoid conflicts
+resource "random_id" "origin_pool_suffix" {
+  count       = length(flatten([for tailnet in var.tailnets : tailnet.services]))
+  byte_length = 4
+  keepers = {
+    # Regenerate suffixes when tailnet configuration changes
+    tailnet_config = jsonencode(var.tailnets)
+  }
+}
+
 # Generate configuration summary documentation - Envoy
 resource "local_file" "envoy_configuration_summary_doc" {
   content = templatefile("./envoy/templates/configuration-summary.md.tftpl", {
     tailnets      = var.tailnets
     k8s_namespace = var.k8s_namespace
+    pool_name_map = {
+      for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
+    }
   })
   filename = "${path.module}/outputs/envoy/configuration-summary.md"
 }

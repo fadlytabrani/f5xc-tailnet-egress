@@ -1,0 +1,13 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tailscale-egress
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames: [
+    "tailscale-auth-tail40b056",
+    "tailscale-auth-tail88356",
+  ]

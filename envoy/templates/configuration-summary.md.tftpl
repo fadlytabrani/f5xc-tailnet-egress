@@ -14,7 +14,7 @@ This document provides the port mapping configuration for the F5 XC Tailnet Egre
 |-------------------|---------|----------|----------|------|
 %{ for tailnet_index, tailnet in tailnets ~}
 %{ for service_index, service in tailnet.services ~}
-| ${service.f5xc_origin_pool} | ${tailnet.tailnet_name} | ${service.endpoint} | ${upper(service.protocol)} | ${10000 + (tailnet_index * 1000) + service_index} |
+| ${pool_name_map[service.f5xc_origin_pool]} | ${tailnet.tailnet_name} | ${service.endpoint} | ${upper(service.protocol)} | ${10000 + (tailnet_index * 1000) + service_index} |
 %{ endfor ~}
 %{ endfor ~}
 
