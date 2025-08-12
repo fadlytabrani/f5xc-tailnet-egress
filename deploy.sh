@@ -279,8 +279,11 @@ if [ -d "outputs/$PROXY_TYPE/manifests" ] && [ "$(ls -A outputs/$PROXY_TYPE/mani
                     echo "      🌐 Tailnet: $TAILNET_NAME"
                     
                     # Prepare the origin pool configuration JSON according to F5 XC API spec
-                    # Based on: https://docs.cloud.f5.com/docs-v2/api/views-origin-pool#operation/ves.io.schema.views.origin_pool.API.Create
+                    # Based on: https://docs.cloud.f5.com/docs-v2/api/views-origin_pool#operation/ves.io.schema.views.origin_pool.API.Create
                     # Using the correct F5 XC API structure provided by user
+                    
+                    # Generate timestamp for description
+                    TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S UTC')
 
                     ORIGIN_POOL_JSON=$(cat <<EOF
 {
@@ -289,7 +292,7 @@ if [ -d "outputs/$PROXY_TYPE/manifests" ] && [ "$(ls -A outputs/$PROXY_TYPE/mani
     "namespace": "$NAMESPACE",
     "labels": {},
     "annotations": {},
-    "description": "f5xc-tailnet-egress generated",
+    "description": "f5xc-tailnet-egress generated $TIMESTAMP",
     "disable": false
   },
   "spec": {
