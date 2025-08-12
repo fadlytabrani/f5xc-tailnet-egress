@@ -1,49 +1,70 @@
 # F5 XC Tailnet Egress - Configuration Summary
 
-## Deployment Information
+## Deployment Process
 
-- **Kubernetes Namespace**: `${k8s_namespace}`
-- **Service Name**: `tailscale-egress`
-- **Generated**: ${timestamp()}
+### What Happens When You Run ./deploy.sh?
 
-## Service Mapping
+The deployment process consists of two main phases:
 
-| F5 XC Origin Pool | Tailnet | Endpoint | Protocol | Port |
-|-------------------|---------|----------|----------|------|
+#### Phase 1: Infrastructure Provisioning (Terraform)
+1. **Initialize Terraform** - Set up working directory and providers
+2. **Validate Configuration** - Verify Terraform syntax and configuration
+3. **Apply Infrastructure** - Generate all configuration files and manifests
+4. **Generate Files**:
+   - Kubernetes manifests in `outputs/envoy/k8s/`
+   - F5 XC origin pool JSONs in `outputs/envoy/f5xc/`
+   - This configuration summary
+
+### What Happens When Press the Red Button?
+
+#### Phase 2: Application Deployment (Kubernetes + F5 XC)
+1. **Start kubectl Proxy** - Establish connection to Kubernetes cluster
+2. **Create F5 XC Origin Pools** - Deploy origin pools via F5 XC API
+3. **Apply Kubernetes Manifests** - Deploy all Kubernetes resources
+4. **Verify Deployment** - Check resource status and health
+
+### Objects That Will Be Created
+
+#### F5 XC Objects
 %{ for tailnet_index, tailnet in tailnets ~}
 %{ for service_index, service in tailnet.services ~}
-| ${pool_name_map[service.f5xc_origin_pool]} | ${tailnet.tailnet_name} | ${service.endpoint} | ${upper(service.protocol)} | ${10000 + (tailnet_index * 1000) + service_index} |
+- **Origin Pool**: `${pool_name_map[service.f5xc_origin_pool]}`
+  - Namespace: `${k8s_namespace}`
+  - Backend: `tailscale-egress.${k8s_namespace}:${10000 + (tailnet_index * 1000) + service_index}`
+  - Protocol: ${upper(service.protocol)}
 %{ endfor ~}
 %{ endfor ~}
 
-## Tailscale Proxy Ports
+#### Kubernetes Resources
+- **Namespace**: `${k8s_namespace}` (if not exists)
+- **ServiceAccount**: `tailscale-egress`
+- **Role**: `tailscale-egress` (RBAC permissions)
+- **RoleBinding**: `tailscale-egress` (bind role to service account)
+- **Secrets**: Tailscale authentication keys for each tailnet
+- **ConfigMap**: Envoy proxy configuration
+- **Service**: `tailscale-egress` (ClusterIP with multiple ports)
+- **StatefulSet**: `tailscale-egress` (main application with Envoy + Tailscale containers)
 
-| Tailnet | HTTP Proxy Port |
-|---------|-----------------|
-%{ for index, tailnet in tailnets ~}
-| ${tailnet.tailnet_name} | ${10550 + index} |
-%{ endfor ~}
+### Manifest Files That Will Be Applied
 
-## F5 XC Origin Pool Configuration
+The following Kubernetes manifests will be applied in order:
+1. `00-secrets.yaml` - Tailscale authentication secrets
+2. `01-serviceaccount.yaml` - Service account for the application
+3. `02-role.yaml` - RBAC role definition
+4. `03-rolebinding.yaml` - Role binding to service account
+5. `04-service.yaml` - Kubernetes service definition
+6. `05-configmap.yaml` - Envoy proxy configuration
+7. `06-statefulset.yaml` - Main application deployment
 
-### Service Endpoints for F5 XC
+### F5 XC API Operations
 
+The following API calls will be made to F5 XC:
 %{ for tailnet_index, tailnet in tailnets ~}
 %{ for service_index, service in tailnet.services ~}
-#### ${service.f5xc_origin_pool}
-
-- **Backend Endpoint**: `tailscale-egress.${k8s_namespace}:${10000 + (tailnet_index * 1000) + service_index}`
-- **Target Service**: `${service.endpoint}:${service.port}` (${upper(service.protocol)})
-- **Tailnet**: `${tailnet.tailnet_name}`
-- **Health Check**: TCP probe on port `${10000 + (tailnet_index * 1000) + service_index}`
-
+- **POST** `/api/config/namespaces/${k8s_namespace}/origin_pools`
+  - Body: JSON configuration for `${pool_name_map[service.f5xc_origin_pool]}`
 %{ endfor ~}
 %{ endfor ~}
-
-## Port Allocation Scheme
-
-- **Service Ports**: `10000 + (tailnet_index * 1000) + service_index`
-- **Tailscale HTTP Proxy Ports**: `10550 + tailnet_index`
 
 ### Example Usage
 

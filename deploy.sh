@@ -4,464 +4,368 @@
 
 set -e
 
-# Function to cleanup kubectl proxy on exit
-cleanup_proxy() {
-    if [ -f ".kubectl-proxy.pid" ]; then
-        PROXY_PID=$(cat .kubectl-proxy.pid)
-        if kill -0 "$PROXY_PID" 2>/dev/null; then
+# Parse command line arguments
+VERBOSE=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [OPTIONS]"
             echo ""
-            echo "🧹 Cleaning up kubectl proxy (PID: $PROXY_PID) on exit..."
-            kill "$PROXY_PID" 2>/dev/null || true
-            sleep 1
-            if kill -0 "$PROXY_PID" 2>/dev/null; then
-                kill -9 "$PROXY_PID" 2>/dev/null || true
-            fi
-        fi
-        rm -f .kubectl-proxy.pid
-    fi
-    
-    # Also kill any remaining kubectl proxy processes
-    REMAINING_PROXIES=$(pgrep -f "kubectl proxy --port=8001" 2>/dev/null || true)
-    if [ -n "$REMAINING_PROXIES" ]; then
-        echo "$REMAINING_PROXIES" | while read -r pid; do
-            if [ -n "$pid" ]; then
-                kill -9 "$pid" 2>/dev/null || true
-            fi
-        done
-    fi
+            echo "Options:"
+            echo "  --verbose    Show verbose Terraform output"
+            echo "  -h, --help   Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0              # Run with minimal output (default)"
+            echo "  $0 --verbose    # Run with verbose Terraform output"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use '$0 --help' for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Configuration
+PROXY_TYPE=${PROXY_TYPE:-"envoy"}
+NAMESPACE=""
+PROXY_PID=""
+
+# Enhanced color palette
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+UNDERLINE='\033[4m'
+NC='\033[0m' # No Color
+
+# Background colors
+BG_BLUE='\033[44m'
+BG_GREEN='\033[42m'
+BG_YELLOW='\033[43m'
+BG_RED='\033[41m'
+
+# ASCII Art
+BANNER="
+${BOLD}${CYAN}🚀 F5 XC Tailnet Egress Deployment${NC}
+"
+
+
+
+
+
+# Enhanced logging functions
+log_header() { 
+    echo -e "\n${BOLD}${BG_BLUE}${WHITE} $1 ${NC}\n"
 }
 
-# Set trap to cleanup on script exit
-trap cleanup_proxy EXIT
+log_step() { 
+    echo -e "${CYAN}🔧${NC} ${BOLD}$1${NC}"
+}
 
-# Configuration - Change this variable to deploy different proxies
-PROXY_TYPE=${PROXY_TYPE:-"envoy"}
+log_info() { 
+    echo -e "${BLUE}ℹ️  ${NC}$1"
+}
 
-# Available proxy types: envoy, caddy, haproxy, nginx, socat, gost, tail4ward
-# Usage examples:
-#   ./deploy.sh                    # Deploy Envoy (default)
-#   PROXY_TYPE=caddy ./deploy.sh   # Deploy Caddy
-#   PROXY_TYPE=haproxy ./deploy.sh # Deploy HAProxy
+log_success() { 
+    echo -e "${GREEN}✅ ${NC}${BOLD}$1${NC}"
+}
 
-echo "🚀 F5 XC Tailnet Egress Deployment - $PROXY_TYPE"
-echo "================================================"
+log_warning() { 
+    echo -e "${YELLOW}⚠️  ${NC}$1"
+}
+
+log_error() { 
+    echo -e "${RED}❌ ${NC}${BOLD}$1${NC}"
+}
+
+log_progress() {
+    echo -e "${PURPLE}🔄 ${NC}$1"
+}
+
+log_complete() {
+    echo -e "${GREEN}🎯 ${NC}${BOLD}$1${NC}"
+}
+
+# Fancy separator
+show_separator() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+# Cleanup function
+cleanup() {
+    if [ -n "$PROXY_PID" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
+        log_progress "Stopping kubectl proxy (PID: $PROXY_PID)..."
+        kill "$PROXY_PID" 2>/dev/null || true
+        sleep 1
+        if kill -0 "$PROXY_PID" 2>/dev/null; then
+            kill -9 "$PROXY_PID" 2>/dev/null || true
+        fi
+    fi
+    
+    # Clean up any remaining proxy processes
+    pkill -f "kubectl proxy --port=8001" 2>/dev/null || true
+    rm -f .kubectl-proxy.pid
+}
 
 # Check prerequisites
-echo "📋 Checking prerequisites..."
-
-if ! command -v terraform &> /dev/null; then
-    echo "❌ Terraform is not installed. Please install Terraform first."
-    exit 1
-fi
-
-if ! command -v kubectl &> /dev/null; then
-    echo "❌ kubectl is not installed. Please install kubectl first."
-    exit 1
-fi
-
-if ! command -v curl &> /dev/null; then
-    echo "❌ curl is not installed. Please install curl first."
-    echo "   Install with: brew install curl (macOS) or apt-get install curl (Ubuntu/Debian)"
-    exit 1
-fi
-
-if ! command -v jq &> /dev/null; then
-    echo "⚠️  jq is not installed. It's recommended for better origin pool detection."
-    echo "   Install with: brew install jq (macOS) or apt-get install jq (Ubuntu/Debian)"
-    echo "   The script will continue with fallback methods."
-fi
-
-if [ ! -f "terraform.tfvars" ]; then
-    echo "❌ terraform.tfvars not found. Please copy and configure from examples/terraform.tfvars.example"
-    exit 1
-fi
-
-echo "✅ Prerequisites check passed"
-
-# Initialize Terraform
-echo "🔧 Initializing Terraform..."
-terraform init
-
-# Validate configuration
-echo "🔍 Validating Terraform configuration..."
-terraform validate
-
-# Plan deployment
-echo "📝 Planning deployment..."
-terraform plan -out=terraform.tfplan
-
-# Ask for confirmation
-read -p "🤔 Do you want to apply these changes? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "❌ Deployment cancelled"
-    exit 1
-fi
-
-# Apply changes
-echo "🏗️  Applying Terraform configuration..."
-terraform apply terraform.tfplan
-
-echo "✅ Terraform deployment complete"
-
-    # Check if outputs/envoy/k8s directory exists and has files
-    if [ -d "outputs/envoy/k8s" ] && [ "$(ls -A outputs/envoy/k8s)" ]; then
-    echo "📦 Applying Kubernetes manifests for $PROXY_TYPE..."
+check_prerequisites() {
+    log_header "PREREQUISITES CHECK"
     
-    # Check kubectl connection
+    local tools=("terraform" "kubectl" "curl")
+    local missing_tools=()
+    
+    for tool in "${tools[@]}"; do
+        log_progress "Checking $tool..."
+        
+        if ! command -v "$tool" &> /dev/null; then
+            missing_tools+=("$tool")
+        fi
+    done
+    
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        log_error "Missing required tools: ${missing_tools[*]}"
+        exit 1
+    fi
+    
+    if [ ! -f "terraform.tfvars" ]; then
+        log_error "terraform.tfvars not found. Please configure it first."
+        exit 1
+    fi
+    
+
+    
+    log_success "All prerequisites satisfied"
+    show_separator
+}
+
+# Terraform operations
+run_terraform() {
+    log_header "TERRAFORM DEPLOYMENT"
+    
+    log_step "Initializing Terraform..."
+    if [ "$VERBOSE" = true ]; then
+        terraform init
+    else
+        terraform init -compact-warnings > /dev/null 2>&1
+    fi
+    log_success "init completed"
+    
+    log_step "Validating configuration..."
+    if [ "$VERBOSE" = true ]; then
+        terraform validate
+    else
+        terraform validate -compact-warnings > /dev/null 2>&1
+    fi
+    log_success "validate completed"
+    
+    log_step "Applying Terraform configuration..."
+    if [ "$VERBOSE" = true ]; then
+        terraform apply --auto-approve
+    else
+        terraform apply --auto-approve -compact-warnings > /dev/null 2>&1
+    fi
+    log_success "Terraform deployment complete"
+    show_separator
+}
+
+# Start kubectl proxy
+start_proxy() {
+    log_header "KUBERNETES CONNECTION"
+    
     if ! kubectl cluster-info &> /dev/null; then
-        echo "❌ Cannot connect to Kubernetes cluster. Please check your kubeconfig."
+        log_error "Cannot connect to Kubernetes cluster"
         exit 1
     fi
     
-    # Extract namespace from Terraform output
     NAMESPACE=$(terraform output -raw k8s_namespace 2>/dev/null || echo "default")
-    echo "🎯 Using namespace: $NAMESPACE"
+    log_info "Target namespace: ${BOLD}$NAMESPACE${NC}"
     
-    # Check if namespace exists, fail if it doesn't
     if ! kubectl get namespace "$NAMESPACE" &> /dev/null; then
-        echo "❌ Namespace '$NAMESPACE' does not exist. Please create it first or check your Terraform configuration."
+        log_error "Namespace '$NAMESPACE' does not exist"
         exit 1
     fi
     
-    # Start kubectl proxy in a separate shell
-    echo "🌐 Starting kubectl proxy in a separate shell..."
-    echo "   This will allow you to access the Kubernetes API at http://localhost:8001"
-    echo "   The proxy will run in the background. To stop it, find the process and kill it."
-    
-    # Start kubectl proxy in background and capture the PID
-    kubectl proxy --port=8001 > /dev/null 2>&1 &
+    log_step "Starting kubectl proxy..."
+    kubectl proxy > /dev/null 2>&1 &
     PROXY_PID=$!
-    
-    # Wait a moment for the process to start and get the actual PID
     sleep 2
     
-    # Verify the process is running and get the actual PID
     if kill -0 "$PROXY_PID" 2>/dev/null; then
-        # Double-check by looking for the actual kubectl proxy process
-        ACTUAL_PID=$(pgrep -f "kubectl proxy --port=8001" | head -1)
-        if [ -n "$ACTUAL_PID" ]; then
-            PROXY_PID=$ACTUAL_PID
-        fi
-        
-        # Save PID to a file for easy cleanup
-        echo $PROXY_PID > .kubectl-proxy.pid
-        
-        echo "   ✅ kubectl proxy started with PID: $PROXY_PID"
-        echo "   📁 PID saved to .kubectl-proxy.pid for easy cleanup"
-        echo "   🚀 Access your cluster at: http://localhost:8001"
-        echo "   🛑 To stop proxy: kill $PROXY_PID or run: kill \$(cat .kubectl-proxy.pid)"
+        echo "$PROXY_PID" > .kubectl-proxy.pid
+        log_success "kubectl proxy active (PID: $PROXY_PID)"
     else
-        echo "   ❌ Failed to start kubectl proxy"
+        log_error "Failed to start kubectl proxy"
+        show_troubleshooting_tips
         exit 1
     fi
-    echo ""
+    show_separator
+}
+
+
+
+# Create origin pools
+create_origin_pools() {
+    log_header "F5 XC OBJECT CREATION"
     
-    # Check for existing F5 XC origin pools to avoid conflicts
-    echo "🔍 Checking for existing F5 XC origin pools via API..."
+    local pools_dir="outputs/envoy/f5xc"
     
-            # Get the unique origin pool names from Terraform output
-        if command -v jq &> /dev/null; then
-            UNIQUE_ORIGIN_POOLS=$(terraform output -json f5xc_origin_pools 2>/dev/null | jq -r '.[].f5xc_origin_pool_unique' 2>/dev/null || echo "")
-            BASE_ORIGIN_POOLS=$(terraform output -json f5xc_origin_pools 2>/dev/null | jq -r '.[].f5xc_origin_pool' 2>/dev/null || echo "")
-        else
-            echo "   ⚠️  jq not found, using fallback method to check origin pools..."
-            # Fallback: try to get origin pools using terraform output -raw and grep
-            UNIQUE_ORIGIN_POOLS=$(terraform output -raw f5xc_origin_pools 2>/dev/null | grep -o 'ost-[^[:space:]]*' 2>/dev/null || echo "")
-            BASE_ORIGIN_POOLS="$UNIQUE_ORIGIN_POOLS"
-        fi
 
-        if [ -n "$UNIQUE_ORIGIN_POOLS" ]; then
-            echo "   📋 Origin pools to be configured:"
-            echo "$BASE_ORIGIN_POOLS" | while read -r pool; do
-                if [ -n "$pool" ]; then
-                    echo "      - $pool"
-                fi
-            done
-
-            echo ""
-            echo "🔍 Generated unique origin pool names from Terraform:"
-            echo "$UNIQUE_ORIGIN_POOLS" | tr ' ' '\n' | grep -v '^$' | while read -r pool; do
-                echo "      - $pool"
-            done
-
-            echo ""
-            echo "🔍 Checking F5 XC API if these origin pools already exist..."
-
-            # Check each unique origin pool against the F5 XC API
-            EXISTING_POOLS=""
-            for pool in $UNIQUE_ORIGIN_POOLS; do
-                if [ -n "$pool" ]; then
-                    echo "   Checking if origin pool '$pool' already exists..."
-
-                    # Use kubectl proxy to access F5 XC API
-                    # Based on F5 XC API documentation: https://docs.cloud.f5.com/docs-v2/api/views-origin-pool
-                    # The correct endpoint follows the F5 XC API pattern, not Kubernetes API pattern
-                    # 
-                    # F5 XC Origin Pool API endpoints:
-                    # - List: GET /api/web/namespaces/{namespace}/origin_pools
-                    # - Get: GET /api/web/namespaces/{namespace}/origin_pools/{name}
-                    # 
-                    # Using the kubectl proxy to access the F5 XC API through the cluster
-                    # Dynamically use the namespace from Terraform output instead of hardcoding
-                    # Check if unique origin pool exists (only need HTTP status, not full response)
-                    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8001/api/config/namespaces/$NAMESPACE/origin_pools/$pool" 2>/dev/null || echo "000")
-
-                    if [ "$HTTP_STATUS" = "200" ]; then
-                        echo "      ⚠️  Unique origin pool '$pool' already exists!"
-                        EXISTING_POOLS="$EXISTING_POOLS $pool"
-                    elif [ "$HTTP_STATUS" = "404" ]; then
-                        echo "      ✅ Unique origin pool '$pool' does not exist (ready to create)"
-                    else
-                        echo "      ❓ Unable to determine status for '$pool' (HTTP: $HTTP_STATUS)"
-                    fi
-                fi
-            done
-        
-        echo ""
-        if [ -n "$EXISTING_POOLS" ]; then
-            echo "❌ ERROR: The following unique origin pools already exist in F5 XC:"
-            echo "$EXISTING_POOLS" | tr ' ' '\n' | grep -v '^$' | while read -r pool; do
-                echo "      - $pool"
-            done
-            echo ""
-            echo "   Deployment failed: Unique origin pool conflicts detected."
-            echo "   This is unexpected - please check your F5 XC configuration."
-            echo "   You may need to delete existing pools or regenerate unique names by running terraform destroy and terraform apply again."
-            exit 1
-        else
-            echo "✅ All unique origin pools are ready to be created in F5 XC."
-            echo "   Proceeding with Kubernetes deployment..."
-        fi
-    else
-        echo "   ℹ️  No origin pools detected in Terraform output"
-    fi
-
-    # Create origin pools using F5 XC API
-    echo "🏗️  Creating F5 XC origin pools via API..."
     
-    # Check if origin pool configuration files exist
-    ORIGIN_POOLS_DIR="outputs/envoy/f5xc"
-    if [ ! -d "$ORIGIN_POOLS_DIR" ]; then
-        echo "   ❌ Origin pools directory not found: $ORIGIN_POOLS_DIR"
-        echo "      Please run 'terraform apply' first to generate the origin pool configurations"
+    local created=0
+    
+    log_progress "Creating origin pools..."
+    
+    # Find all JSON files in the pools directory
+    local json_files=($pools_dir/*.json)
+    
+    if [ ${#json_files[@]} -eq 0 ]; then
+        log_error "No JSON files found in $pools_dir"
+        log_error "Check Terraform outputs and ensure origin pool configuration files are generated"
+        show_troubleshooting_tips
         exit 1
     fi
     
-    # Wait a moment for Kubernetes service to be fully ready
-    echo "   ⏳ Waiting for Kubernetes service to be ready..."
-    sleep 5
-    
-    # Get the origin pool configuration from Terraform output
-    if command -v jq &> /dev/null; then
-        ORIGIN_POOL_CONFIG=$(terraform output -json f5xc_origin_pools 2>/dev/null)
-        
-        # Verify that all required JSON files exist
-        MISSING_FILES=""
-        for pool_config in $(echo "$ORIGIN_POOL_CONFIG" | jq -c '.[]'); do
-            UNIQUE_POOL_NAME=$(echo "$pool_config" | jq -r '.f5xc_origin_pool_unique')
-            JSON_FILE="$ORIGIN_POOLS_DIR/$UNIQUE_POOL_NAME.json"
-            if [ ! -f "$JSON_FILE" ]; then
-                MISSING_FILES="$MISSING_FILES $JSON_FILE"
+    for json_file in "${json_files[@]}"; do
+        if [ -f "$json_file" ]; then
+            # Extract the origin pool name from the filename (without .json extension)
+            local unique_name=$(basename "$json_file" .json)
+            
+            log_info "Creating: ${BOLD}$unique_name${NC}"
+            
+            local response=$(curl -s -w "\n%{http_code}" -X POST \
+                -H "Content-Type: application/json" \
+                -d "$(cat "$json_file")" \
+                "http://localhost:8001/api/config/namespaces/$NAMESPACE/origin_pools" \
+                2>/dev/null)
+            
+            local status=$(echo "$response" | tail -n1)
+            if [ "$status" = "200" ] || [ "$status" = "201" ]; then
+                log_success "Created: $unique_name"
+                ((created++))
+            else
+                log_error "Failed: $unique_name (HTTP: $status)"
+                log_error "💡 Investigate error response codes at: https://docs.cloud.f5.com/docs-v2/api/views-origin-pool#operation/ves.io.schema.views.origin_pool.API.Create"
+                log_error "Stopping deployment due to origin pool creation failure"
+                show_troubleshooting_tips
+                exit 1
             fi
-        done
-        
-        if [ -n "$MISSING_FILES" ]; then
-            echo "   ❌ Missing origin pool JSON configuration files:"
-            echo "$MISSING_FILES" | tr ' ' '\n' | grep -v '^$' | while read -r file; do
-                echo "      - $file"
-            done
-            echo "      Please run 'terraform apply' first to generate all required files"
-            exit 1
         fi
-        
-        echo "   ✅ All origin pool JSON configuration files are available"
-    else
-        echo "   ⚠️  jq not found, cannot create origin pools automatically"
-        echo "   Please create origin pools manually in F5 XC console or use jq for automation"
-        ORIGIN_POOL_CONFIG=""
-    fi
+    done
     
-    if [ -n "$ORIGIN_POOL_CONFIG" ]; then
-        # Create each origin pool
-        CREATED_POOLS=""
-        FAILED_POOLS=""
-        
-        # Parse the JSON and create pools
-        echo "$ORIGIN_POOL_CONFIG" | jq -c '.[]' | while read -r pool_config; do
-            if [ -n "$pool_config" ]; then
-                # Extract pool details
-                BASE_POOL_NAME=$(echo "$pool_config" | jq -r '.f5xc_origin_pool')
-                SERVICE_ENDPOINT=$(echo "$pool_config" | jq -r '.service_endpoint')
-                EXPOSED_PORT=$(echo "$pool_config" | jq -r '.exposed_port')
-                ENDPOINT=$(echo "$pool_config" | jq -r '.endpoint')
-                TAILNET_NAME=$(echo "$pool_config" | jq -r '.tailnet_name')
-                
-                # Get the unique pool name from Terraform output
-                UNIQUE_POOL_NAME=$(echo "$ORIGIN_POOL_CONFIG" | jq -r --arg base_name "$BASE_POOL_NAME" '.[] | select(.f5xc_origin_pool == $base_name) | .f5xc_origin_pool_unique' 2>/dev/null || echo "")
-                
-                if [ -n "$UNIQUE_POOL_NAME" ]; then
-                    echo "   🏗️  Creating origin pool: $UNIQUE_POOL_NAME"
-                    echo "      📍 Backend: $SERVICE_ENDPOINT"
-                    echo "      🔌 Port: $EXPOSED_PORT"
-                    echo "      🎯 Service: $ENDPOINT"
-                    echo "      🌐 Tailnet: $TAILNET_NAME"
-                    
-                    # Read the origin pool configuration JSON from Terraform-generated file
-                    ORIGIN_POOL_JSON_FILE="outputs/envoy/f5xc/$UNIQUE_POOL_NAME.json"
-                    
-                    if [ -f "$ORIGIN_POOL_JSON_FILE" ]; then
-                        ORIGIN_POOL_JSON=$(cat "$ORIGIN_POOL_JSON_FILE")
-                        echo "      📁 Using JSON configuration from: $ORIGIN_POOL_JSON_FILE"
-                    else
-                        echo "      ❌ JSON configuration file not found: $ORIGIN_POOL_JSON_FILE"
-                        echo "         Please run 'terraform apply' first to generate the origin pool configurations"
-                        FAILED_POOLS="$FAILED_POOLS $UNIQUE_POOL_NAME"
-                        continue
-                    fi
-                    
-                    # Create the origin pool via F5 XC API
-                    echo "      📤 Sending creation request to F5 XC API..."
-                    
-                    # Use kubectl proxy to access F5 XC API
-                    # POST to create new origin pool using the correct F5 XC API endpoint
-                    # Based on: https://docs.cloud.f5.com/docs-v2/api/views-origin-pool#operation/ves.io.schema.views.origin_pool.API.Create
-                    # Try different API endpoint variations for F5 XC
-                    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-                        -H "Content-Type: application/json" \
-                        -d "$ORIGIN_POOL_JSON" \
-                        "http://localhost:8001/api/config/namespaces/$NAMESPACE/origin_pools" \
-                        2>/dev/null)
-                    
-                    # Extract HTTP status code (last line) and response body
-                    # Use a simple approach: split by newline and get last element
-                    HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tr '\n' ' ' | awk '{print $NF}')
-                    # Get all lines except the last one (HTTP status)
-                    RESPONSE_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
-                    
-                    if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "201" ]; then
-                        echo "      ✅ Origin pool '$UNIQUE_POOL_NAME' created successfully"
-                        CREATED_POOLS="$CREATED_POOLS $UNIQUE_POOL_NAME"
-                    else
-                        echo "      ❌ Failed to create origin pool '$UNIQUE_POOL_NAME'"
-                        echo "         HTTP Status: $HTTP_STATUS"
-                        echo "         Response: $RESPONSE_BODY"
-                        FAILED_POOLS="$FAILED_POOLS $UNIQUE_POOL_NAME"
-                    fi
-                    
-                    echo ""
-                else
-                    echo "   ⚠️  Could not find unique name for base pool: $BASE_POOL_NAME"
-                    FAILED_POOLS="$FAILED_POOLS $BASE_POOL_NAME"
-                fi
-            fi
-        done
-        
-        echo ""
-        if [ -n "$CREATED_POOLS" ]; then
-            echo "✅ Successfully created origin pools:"
-            echo "$CREATED_POOLS" | tr ' ' '\n' | grep -v '^$' | while read -r pool; do
-                echo "      - $pool"
-            done
-        fi
-        
-        if [ -n "$FAILED_POOLS" ]; then
-            echo "❌ Failed to create origin pools:"
-            echo "$FAILED_POOLS" | tr ' ' '\n' | grep -v '^$' | while read -r pool; do
-                echo "      - $pool"
-            done
-            echo ""
-            echo "   ⚠️  Some origin pools failed to create. Check the errors above."
-            echo "   You may need to create them manually in the F5 XC console."
-        fi
-        
-        if [ -z "$FAILED_POOLS" ]; then
-            echo "🎉 All origin pools created successfully in F5 XC!"
-        fi
-    else
-        echo "   ℹ️  No origin pool configuration available for automatic creation"
-    fi
+    log_success "All origin pools created successfully"
+    show_separator
+}
+
+# Apply Kubernetes manifests
+apply_manifests() {
+    log_header "KUBERNETES DEPLOYMENT"
     
-    echo ""
+    local manifests_dir="outputs/envoy/k8s"
+    local manifest_files=($manifests_dir/*.yaml)
     
-    # Apply manifests in order
-    for manifest in outputs/envoy/k8s/*.yaml; do
+    log_progress "Applying Kubernetes manifests..."
+    
+    for manifest in "${manifest_files[@]}"; do
         if [ -f "$manifest" ]; then
-            echo "  Applying $(basename "$manifest")..."
+            local basename=$(basename "$manifest")
+            log_info "Applying: ${BOLD}$basename${NC}"
+            
             kubectl apply -f "$manifest" -n "$NAMESPACE"
         fi
     done
     
-    echo "✅ Kubernetes manifests applied successfully"
+    log_success "All Kubernetes manifests applied"
+    show_separator
+}
+
+# Show troubleshooting tips
+show_troubleshooting_tips() {
+    log_header "TROUBLESHOOTING TIPS"
     
-    # Stop kubectl proxy since it's no longer needed
-    echo "🛑 Stopping kubectl proxy..."
+    echo -e "${BOLD}${YELLOW}🔧 Common Issues & Solutions:${NC}\n"
     
-    # Method 1: Try to stop using PID file
-    if [ -f ".kubectl-proxy.pid" ]; then
-        PROXY_PID=$(cat .kubectl-proxy.pid)
-        if kill -0 "$PROXY_PID" 2>/dev/null; then
-            echo "   🎯 Stopping kubectl proxy with PID: $PROXY_PID"
-            kill "$PROXY_PID"
-            
-            # Wait a moment for graceful shutdown
-            sleep 2
-            
-            # Check if it's still running
-            if kill -0 "$PROXY_PID" 2>/dev/null; then
-                echo "   ⚠️  Graceful shutdown failed, forcing termination..."
-                kill -9 "$PROXY_PID" 2>/dev/null || true
-            fi
-            
-            echo "   ✅ kubectl proxy (PID: $PROXY_PID) stopped successfully"
-        else
-            echo "   ℹ️  kubectl proxy process already stopped"
-        fi
-        rm -f .kubectl-proxy.pid
+    echo -e "${BOLD}${CYAN}F5 XC OBJECT CREATION:${NC}"
+    echo -e "  • Most errors occur when trying to create objects that already exist"
+    echo -e "  • Solution: Run ${BOLD}terraform destroy${NC} to clean up existing resources"
+    echo -e "  • Then retry: ${BOLD}./deploy.sh${NC}\n"
+
+    echo -e "${BOLD}${CYAN}KUBERNETES CONNECTION:${NC}"
+    echo -e "  • Ensure kubeconfig is valid and not expired"
+    echo -e "  • Check kubectl connection and verify cluster access"
+    echo -e "  • Verify: ${BOLD}kubectl cluster-info${NC}"
+    echo -e "  • kubectl proxy default listen port is 8001, make sure it is not in use\n"
+
+    echo -e "${BOLD}${WHITE}📚 Additional Resources:${NC}"
+    echo -e "  • Terraform Commands: ${BOLD}terraform plan${NC}, ${BOLD}terraform apply${NC}, ${BOLD}terraform destroy${NC}"
+    
+    show_separator
+}
+
+# Show deployment status
+show_status() {
+    log_header "DEPLOYMENT STATUS"
+    
+    log_progress "Checking resource status..."
+    
+    echo -e "\n${BOLD}${CYAN}StatefulSet:${NC}"
+    kubectl get statefulset tailscale-egress -n "$NAMESPACE" -o wide 2>/dev/null || log_info "StatefulSet not found yet..."
+    
+    echo -e "\n${BOLD}${CYAN}Service:${NC}"
+    kubectl get service tailscale-egress -n "$NAMESPACE" -o wide 2>/dev/null || log_info "Service not found yet..."
+    
+    echo -e "\n${BOLD}${GREEN}🎉 DEPLOYMENT SUCCESSFUL! ✨ All systems operational${NC}\n"
+    
+    echo -e "${BOLD}${WHITE}Next Steps:${NC}"
+    echo -e "  ${CYAN}📊${NC} Check pod status: ${BOLD}kubectl get pods -l app=tailscale-egress -n $NAMESPACE${NC}"
+    echo -e "  ${CYAN}📋${NC} View logs: ${BOLD}kubectl logs -l app=tailscale-egress -c tailscale-<tailnet-name> -n $NAMESPACE${NC}"
+    echo -e "  ${CYAN}🔗${NC} Port forward: ${BOLD}kubectl port-forward svc/tailscale-egress <local-port>:<service-port> -n $NAMESPACE${NC}"
+    
+    show_separator
+}
+
+# Main execution
+main() {
+    clear
+    echo -e "$BANNER"
+    echo -e "${BOLD}${WHITE}Proxy Type:${NC} ${CYAN}$PROXY_TYPE${NC}"
+    echo -e "${BOLD}${WHITE}Timestamp:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
+    show_separator
+    
+    # Set trap for cleanup
+    trap cleanup EXIT
+    
+    check_prerequisites
+    run_terraform
+    
+    echo -e "\n${BOLD}${YELLOW}🤔 Ready to press the red button? 🚨${NC}"
+    echo -e "${BOLD}${WHITE}💡 Review the configuration summary:${NC} ${CYAN}outputs/envoy/configuration-summary.md${NC}"
+    read -p "   Continue with deployment? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Deployment stopped after Terraform. Review configuration-summary.md and run ./deploy.sh again when ready."
+        exit 0
+    fi
+    
+    if [ "$PROXY_TYPE" = "envoy" ]; then
+        start_proxy
+        create_origin_pools
+        apply_manifests
+        show_status
     else
-        echo "   ℹ️  No kubectl proxy PID file found"
+        log_info "Proxy type '$PROXY_TYPE' not yet implemented"
     fi
-    
-    # Method 2: Fallback - kill any remaining kubectl proxy processes
-    REMAINING_PROXIES=$(pgrep -f "kubectl proxy --port=8001" 2>/dev/null || true)
-    if [ -n "$REMAINING_PROXIES" ]; then
-        echo "   🧹 Cleaning up remaining kubectl proxy processes..."
-        echo "$REMAINING_PROXIES" | while read -r pid; do
-            if [ -n "$pid" ]; then
-                echo "      Stopping PID: $pid"
-                kill -9 "$pid" 2>/dev/null || true
-            fi
-        done
-        echo "   ✅ All remaining kubectl proxy processes stopped"
-    fi
-    
-    # Method 3: Check if port 8001 is still in use
-    if command -v lsof &> /dev/null; then
-        PORT_USERS=$(lsof -ti:8001 2>/dev/null || true)
-        if [ -n "$PORT_USERS" ]; then
-            echo "   🚨 Port 8001 still in use by processes: $PORT_USERS"
-            echo "      You may need to manually stop these processes"
-        else
-            echo "   ✅ Port 8001 is now free"
-        fi
-    fi
-    
-    echo ""
-    
-    # Show deployment status
-    echo "📊 Checking deployment status..."
-    kubectl get statefulset tailscale-egress -n "$NAMESPACE" -o wide 2>/dev/null || echo "StatefulSet not found yet..."
-    kubectl get service tailscale-egress -n "$NAMESPACE" -o wide 2>/dev/null || echo "Service not found yet..."
-    
-    echo ""
-    echo "🎉 Deployment completed successfully!"
-    echo ""
-    echo "📖 Next steps:"
-    echo "  - Check pod status: kubectl get pods -l app=tailscale-egress -n $NAMESPACE"
-    echo "  - View logs: kubectl logs -l app=tailscale-egress -c tailscale-<tailnet-name> -n $NAMESPACE"
-    echo "  - Port forward for testing: kubectl port-forward svc/tailscale-egress <local-port>:<service-port> -n $NAMESPACE"
-    echo ""
-    echo "📚 For more information, see configuration-summary.md generated by Terraform in the outputs/$PROXY_TYPE directory"
-else
-    echo "⚠️  No manifests found for $PROXY_TYPE. Run 'terraform apply' first to generate Kubernetes manifests."
-fi
+}
+
+# Run main function
+main "$@"

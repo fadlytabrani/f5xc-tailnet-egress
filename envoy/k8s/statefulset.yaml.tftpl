@@ -18,7 +18,9 @@ spec:
     spec:
       containers:
         - name: envoy
-          image: envoyproxy/envoy:distroless-dev
+          image: envoyproxy/envoy-distroless:v1.34-latest
+          # image: regd.izpzi.com/envoyproxy/envoy-distroless:v1.34-latest
+          # Host your own cache or use mine above if experiencing dockerhub pull limits from F5XC
           volumeMounts:
             - name: envoy-config
               mountPath: /etc/envoy
