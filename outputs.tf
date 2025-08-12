@@ -37,6 +37,8 @@ locals {
         f5xc_origin_pool = service.f5xc_origin_pool
         port             = service.port
         protocol         = service.protocol
+        exposed_port     = 10000 + (tailnet_index * 1000) + service_index
+        service_endpoint = "tailscale-egress.${var.k8s_namespace}:${10000 + (tailnet_index * 1000) + service_index}"
       }
     ]
   ])
@@ -64,21 +66,35 @@ output "k8s_namespace" {
 output "kubernetes_manifests" {
   description = "Generated Kubernetes manifest file paths"
   value = {
-    service     = "${path.module}/outputs/envoy/manifests/04-service.yaml"
-    configmap   = "${path.module}/outputs/envoy/manifests/05-configmap.yaml"
-    statefulset = "${path.module}/outputs/envoy/manifests/06-statefulset.yaml"
+    service     = "${path.module}/outputs/envoy/k8s/04-service.yaml"
+    configmap   = "${path.module}/outputs/envoy/k8s/05-configmap.yaml"
+    statefulset = "${path.module}/outputs/envoy/k8s/06-statefulset.yaml"
     rbac_files = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? [
-      "${path.module}/outputs/envoy/manifests/00-secrets.yaml",
-      "${path.module}/outputs/envoy/manifests/01-serviceaccount.yaml",
-      "${path.module}/outputs/envoy/manifests/02-role.yaml",
-      "${path.module}/outputs/envoy/manifests/03-rolebinding.yaml"
+      "${path.module}/outputs/envoy/k8s/00-secrets.yaml",
+      "${path.module}/outputs/envoy/k8s/01-serviceaccount.yaml",
+      "${path.module}/outputs/envoy/k8s/02-role.yaml",
+      "${path.module}/outputs/envoy/k8s/03-rolebinding.yaml"
     ] : []
   }
+}
+
+output "origin_pool_configs" {
+  description = "Generated F5 XC origin pool JSON configuration file paths"
+  value = [
+    for service in local.all_services : {
+      f5xc_origin_pool        = service.f5xc_origin_pool
+      f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
+      json_file_path          = "${path.module}/outputs/envoy/f5xc/${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}.json"
+      tailnet_name            = service.tailnet_name
+      service_endpoint        = service.service_endpoint
+      exposed_port            = service.exposed_port
+    }
+  ]
 }
 
 output "documentation" {
   description = "Generated documentation file paths"
   value = {
-    configuration_summary = "${path.module}/outputs/configuration-summary.md"
+    configuration_summary = "${path.module}/outputs/envoy/configuration-summary.md"
   }
 }

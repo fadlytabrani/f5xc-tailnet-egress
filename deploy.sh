@@ -104,8 +104,8 @@ terraform apply terraform.tfplan
 
 echo "✅ Terraform deployment complete"
 
-# Check if outputs/$PROXY_TYPE/manifests directory exists and has files
-if [ -d "outputs/$PROXY_TYPE/manifests" ] && [ "$(ls -A outputs/$PROXY_TYPE/manifests)" ]; then
+    # Check if outputs/envoy/k8s directory exists and has files
+    if [ -d "outputs/envoy/k8s" ] && [ "$(ls -A outputs/envoy/k8s)" ]; then
     echo "📦 Applying Kubernetes manifests for $PROXY_TYPE..."
     
     # Check kubectl connection
@@ -240,6 +240,14 @@ if [ -d "outputs/$PROXY_TYPE/manifests" ] && [ "$(ls -A outputs/$PROXY_TYPE/mani
     # Create origin pools using F5 XC API
     echo "🏗️  Creating F5 XC origin pools via API..."
     
+    # Check if origin pool configuration files exist
+    ORIGIN_POOLS_DIR="outputs/envoy/f5xc"
+    if [ ! -d "$ORIGIN_POOLS_DIR" ]; then
+        echo "   ❌ Origin pools directory not found: $ORIGIN_POOLS_DIR"
+        echo "      Please run 'terraform apply' first to generate the origin pool configurations"
+        exit 1
+    fi
+    
     # Wait a moment for Kubernetes service to be fully ready
     echo "   ⏳ Waiting for Kubernetes service to be ready..."
     sleep 5
@@ -247,6 +255,27 @@ if [ -d "outputs/$PROXY_TYPE/manifests" ] && [ "$(ls -A outputs/$PROXY_TYPE/mani
     # Get the origin pool configuration from Terraform output
     if command -v jq &> /dev/null; then
         ORIGIN_POOL_CONFIG=$(terraform output -json f5xc_origin_pools 2>/dev/null)
+        
+        # Verify that all required JSON files exist
+        MISSING_FILES=""
+        for pool_config in $(echo "$ORIGIN_POOL_CONFIG" | jq -c '.[]'); do
+            UNIQUE_POOL_NAME=$(echo "$pool_config" | jq -r '.f5xc_origin_pool_unique')
+            JSON_FILE="$ORIGIN_POOLS_DIR/$UNIQUE_POOL_NAME.json"
+            if [ ! -f "$JSON_FILE" ]; then
+                MISSING_FILES="$MISSING_FILES $JSON_FILE"
+            fi
+        done
+        
+        if [ -n "$MISSING_FILES" ]; then
+            echo "   ❌ Missing origin pool JSON configuration files:"
+            echo "$MISSING_FILES" | tr ' ' '\n' | grep -v '^$' | while read -r file; do
+                echo "      - $file"
+            done
+            echo "      Please run 'terraform apply' first to generate all required files"
+            exit 1
+        fi
+        
+        echo "   ✅ All origin pool JSON configuration files are available"
     else
         echo "   ⚠️  jq not found, cannot create origin pools automatically"
         echo "   Please create origin pools manually in F5 XC console or use jq for automation"
@@ -278,58 +307,18 @@ if [ -d "outputs/$PROXY_TYPE/manifests" ] && [ "$(ls -A outputs/$PROXY_TYPE/mani
                     echo "      🎯 Service: $ENDPOINT"
                     echo "      🌐 Tailnet: $TAILNET_NAME"
                     
-                    # Prepare the origin pool configuration JSON according to F5 XC API spec
-                    # Based on: https://docs.cloud.f5.com/docs-v2/api/views-origin_pool#operation/ves.io.schema.views.origin_pool.API.Create
-                    # Using the correct F5 XC API structure provided by user
+                    # Read the origin pool configuration JSON from Terraform-generated file
+                    ORIGIN_POOL_JSON_FILE="outputs/envoy/f5xc/$UNIQUE_POOL_NAME.json"
                     
-                    # Generate timestamp for description
-                    TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S UTC')
-
-                    ORIGIN_POOL_JSON=$(cat <<EOF
-{
-  "metadata": {
-    "name": "$UNIQUE_POOL_NAME",
-    "namespace": "$NAMESPACE",
-    "labels": {},
-    "annotations": {},
-    "description": "f5xc-tailnet-egress generated $TIMESTAMP",
-    "disable": false
-  },
-  "spec": {
-    "origin_servers": [
-      {
-        "k8s_service": {
-          "service_name": "$SERVICE_ENDPOINT",
-          "protocol": "PROTOCOL_TCP",
-          "site_locator": {
-            "virtual_site": {
-              "tenant": "ves-io",
-              "namespace": "shared",
-              "name": "ves-io-all-res",
-              "kind": "virtual_site"
-            }
-          },
-          "vk8s_networks": {},
-          "snat_pool": {
-            "no_snat_pool": {}
-          }
-        },
-        "labels": {}
-      }
-    ],
-    "no_tls": {},
-    "port": $EXPOSED_PORT,
-    "same_as_endpoint_port": {},
-    "healthcheck": [],
-    "loadbalancer_algorithm": "LB_OVERRIDE",
-    "endpoint_selection": "LOCAL_PREFERRED",
-    "upstream_conn_pool_reuse_type": {
-      "enable_conn_pool_reuse": {}
-    }
-  }
-}
-EOF
-)
+                    if [ -f "$ORIGIN_POOL_JSON_FILE" ]; then
+                        ORIGIN_POOL_JSON=$(cat "$ORIGIN_POOL_JSON_FILE")
+                        echo "      📁 Using JSON configuration from: $ORIGIN_POOL_JSON_FILE"
+                    else
+                        echo "      ❌ JSON configuration file not found: $ORIGIN_POOL_JSON_FILE"
+                        echo "         Please run 'terraform apply' first to generate the origin pool configurations"
+                        FAILED_POOLS="$FAILED_POOLS $UNIQUE_POOL_NAME"
+                        continue
+                    fi
                     
                     # Create the origin pool via F5 XC API
                     echo "      📤 Sending creation request to F5 XC API..."
@@ -396,7 +385,7 @@ EOF
     echo ""
     
     # Apply manifests in order
-    for manifest in outputs/$PROXY_TYPE/manifests/*.yaml; do
+    for manifest in outputs/envoy/k8s/*.yaml; do
         if [ -f "$manifest" ]; then
             echo "  Applying $(basename "$manifest")..."
             kubectl apply -f "$manifest" -n "$NAMESPACE"

@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "name": "${origin_pool_name}",
+    "namespace": "${namespace}",
+    "labels": {},
+    "annotations": {},
+    "description": "f5xc-tailnet-egress generated: ${timestamp()}",
+    "disable": false
+  },
+  "spec": {
+    "origin_servers": [
+      {
+        "k8s_service": {
+          "service_name": "${service_endpoint}",
+          "protocol": "${protocol == "tcp" ? "PROTOCOL_TCP" : protocol == "udp" ? "PROTOCOL_UDP" : "PROTOCOL_TCP"}",
+          "site_locator": {
+            "virtual_site": {
+              "tenant": "ves-io",
+              "namespace": "shared",
+              "name": "ves-io-all-res",
+              "kind": "virtual_site"
+            }
+          },
+          "vk8s_networks": {},
+          "snat_pool": {
+            "no_snat_pool": {}
+          }
+        },
+        "labels": {}
+      }
+    ],
+    "no_tls": {},
+    "port": ${exposed_port},
+    "same_as_endpoint_port": {},
+    "healthcheck": [],
+    "loadbalancer_algorithm": "LB_OVERRIDE",
+    "endpoint_selection": "LOCAL_PREFERRED",
+    "upstream_conn_pool_reuse_type": {
+      "enable_conn_pool_reuse": {}
+    }
+  }
+}

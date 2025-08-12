@@ -13,35 +13,35 @@ terraform {
 
 # Generate Service for multi-tailnet egress - Envoy
 resource "local_file" "envoy_service" {
-  content = templatefile("./envoy/templates/service.yaml.tftpl", {
+  content = templatefile("./envoy/k8s/service.yaml.tftpl", {
     tailnets = var.tailnets
   })
-  filename = "${path.module}/outputs/envoy/manifests/04-service.yaml"
+  filename = "${path.module}/outputs/envoy/k8s/04-service.yaml"
 }
 
 # Generate RBAC resources only if any tailnet uses k8s secrets - Envoy
 resource "local_file" "envoy_serviceaccount" {
   count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/templates/serviceaccount.yaml.tftpl", {
+  content = templatefile("./envoy/k8s/serviceaccount.yaml.tftpl", {
     tailnets = var.tailnets
   })
-  filename = "${path.module}/outputs/envoy/manifests/01-serviceaccount.yaml"
+  filename = "${path.module}/outputs/envoy/k8s/01-serviceaccount.yaml"
 }
 
 resource "local_file" "envoy_role" {
   count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/templates/role.yaml.tftpl", {
+  content = templatefile("./envoy/k8s/role.yaml.tftpl", {
     tailnets = var.tailnets
   })
-  filename = "${path.module}/outputs/envoy/manifests/02-role.yaml"
+  filename = "${path.module}/outputs/envoy/k8s/02-role.yaml"
 }
 
 resource "local_file" "envoy_rolebinding" {
   count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/templates/rolebinding.yaml.tftpl", {
+  content = templatefile("./envoy/k8s/rolebinding.yaml.tftpl", {
     tailnets = var.tailnets
   })
-  filename = "${path.module}/outputs/envoy/manifests/03-rolebinding.yaml"
+  filename = "${path.module}/outputs/envoy/k8s/03-rolebinding.yaml"
 }
 
 
@@ -49,20 +49,20 @@ resource "local_file" "envoy_rolebinding" {
 # Generate secrets for tailnets that use k8s secrets - Envoy
 resource "local_file" "envoy_secrets" {
   count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/templates/secrets.yaml.tftpl", {
+  content = templatefile("./envoy/k8s/secrets.yaml.tftpl", {
     tailnets = var.tailnets
   })
-  filename = "${path.module}/outputs/envoy/manifests/00-secrets.yaml"
+  filename = "${path.module}/outputs/envoy/k8s/00-secrets.yaml"
 }
 
 
 
 # Generate ConfigMap - Envoy
 resource "local_file" "envoy_configmap" {
-  content = templatefile("./envoy/templates/configmap.yaml.tftpl", {
+  content = templatefile("./envoy/k8s/configmap.yaml.tftpl", {
     tailnets = var.tailnets
   })
-  filename = "${path.module}/outputs/envoy/manifests/05-configmap.yaml"
+  filename = "${path.module}/outputs/envoy/k8s/05-configmap.yaml"
 }
 
 
@@ -71,14 +71,14 @@ resource "local_file" "envoy_configmap" {
 resource "local_file" "envoy_statefulset" {
   content = templatefile(
     anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret])
-    ? "./envoy/templates/statefulset-secrets.yaml.tftpl"
-    : "./envoy/templates/statefulset.yaml.tftpl",
+    ? "./envoy/k8s/statefulset-secrets.yaml.tftpl"
+    : "./envoy/k8s/statefulset.yaml.tftpl",
     {
       tailnets      = var.tailnets
       k8s_namespace = var.k8s_namespace
     }
   )
-  filename = "${path.module}/outputs/envoy/manifests/06-statefulset.yaml"
+  filename = "${path.module}/outputs/envoy/k8s/06-statefulset.yaml"
 }
 
 
@@ -93,9 +93,22 @@ resource "random_id" "origin_pool_suffix" {
   }
 }
 
+# Generate origin pool JSON configurations for F5 XC API
+resource "local_file" "origin_pool_configs" {
+  count = length(flatten([for tailnet in var.tailnets : tailnet.services]))
+  content = templatefile("${path.module}/envoy/f5xc/origin_pool.json.tftpl", {
+    origin_pool_name = "${local.all_services[count.index].f5xc_origin_pool}-${random_id.origin_pool_suffix[count.index].hex}"
+    namespace        = var.k8s_namespace
+    service_endpoint = local.all_services[count.index].service_endpoint
+    exposed_port     = local.all_services[count.index].exposed_port
+    protocol         = local.all_services[count.index].protocol
+  })
+  filename = "${path.module}/outputs/envoy/f5xc/${local.all_services[count.index].f5xc_origin_pool}-${random_id.origin_pool_suffix[count.index].hex}.json"
+}
+
 # Generate configuration summary documentation - Envoy
 resource "local_file" "envoy_configuration_summary_doc" {
-  content = templatefile("./envoy/templates/configuration-summary.md.tftpl", {
+  content = templatefile("./envoy/configuration-summary.md.tftpl", {
     tailnets      = var.tailnets
     k8s_namespace = var.k8s_namespace
     pool_name_map = {
