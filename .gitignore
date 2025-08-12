@@ -10,6 +10,9 @@
 terraform.tfplan
 terraform.tfplan.*
 
+# Generated outputs from Terraform (manifests, configs, etc.) - regenerated on each apply
+outputs/
+
 # Generated manifests (optional - you might want to commit these)
 # manifests/
 
