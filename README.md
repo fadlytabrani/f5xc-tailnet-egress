@@ -50,6 +50,8 @@ A Terraform-based solution to generate manifests for connecting F5 Distributed C
 
 ## 🚀 Deployment Quick Start
 
+> **Note**: The deployment script uses kubectl to apply configuration. Make sure it has been initialised within your console with the appropriate KubeConfig. https://docs.cloud.f5.com/docs-v2/administration/how-tos/user-mgmt/Credentials.
+
 1.  **Clone the repository**:
 
     ```bash
@@ -169,8 +171,6 @@ If Using Secrets,
 - **RoleBinding** - bind role to service account
 - **Secrets** - Tailscale authentication keys for each tailnet
 
-> **Note**: The current default implementation uses Envoy proxy containers, but the architecture is designed to support other proxy solutions. You can modify the container images and configurations in the templates to use alternative proxies like socat, gost, tail4ward, or other custom solutions. The port allocation and routing logic is proxy-agnostic. More proxy configurations will be added to the project soon.
-
 ## 🔧 Port Allocations
 
 The egress service uses a systematic port allocation scheme that works with any L4 proxy container:
@@ -188,7 +188,11 @@ Example:
 - **RBAC Integration**: Automatic ServiceAccount, Role, and RoleBinding generation
 - **Secret Management**: Secure storage of Tailscale authentication keys
 
-## 📖 Documentation
+## 🔐 Solution Extensions
+
+The current default implementation uses Envoy proxy containers, but the architecture is designed to support other proxy solutions. You can modify the container images and configurations in the templates to use alternative proxies like socat, gost, tail4ward, or other custom solutions. The port allocation and routing logic is proxy-agnostic. More proxy configurations will be added to the project soon.
+
+## 📖 Addtional Documentation
 
 - [Envoy Solution](docs/envoy.md) - Envoy proxy implementation details
 
