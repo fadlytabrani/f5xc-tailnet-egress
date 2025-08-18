@@ -2,6 +2,8 @@
 
 This document explains how the Envoy proxy solution works.
 
+![Architecture Diagram](images/architecture-envoy.svg)
+
 ## How It Works
 
 The Envoy solution provides an L4 TCP proxy that routes traffic from F5 XC to multiple Tailscale networks through a multi-container architecture.

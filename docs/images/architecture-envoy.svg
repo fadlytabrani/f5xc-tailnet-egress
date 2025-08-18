@@ -4,10 +4,11 @@
    height="600"
    version="1.1"
    id="svg62"
-   sodipodi:docname="architecture.svg"
+   sodipodi:docname="architecture-envoy.svg"
    inkscape:version="1.4.2 (ebf0e940, 2025-05-08)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
   <sodipodi:namedview
@@ -21,7 +22,7 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="1.3866667"
      inkscape:cx="620.55287"
-     inkscape:cy="321.63461"
+     inkscape:cy="354.08653"
      inkscape:window-width="2560"
      inkscape:window-height="1387"
      inkscape:window-x="0"
@@ -52,7 +53,7 @@
        y1="467.33384"
        x2="539.37673"
        y2="983.7484"
-       gradientTransform="matrix(2.134989,0,0,0.22888187,-0.29366416,118.27815)"
+       gradientTransform="matrix(2.1336002,0,0,0.5555714,0.09681351,-34.734131)"
        gradientUnits="userSpaceOnUse">
       <stop
          offset="0%"
@@ -101,7 +102,7 @@
        y1="1646.0014"
        x2="313.97239"
        y2="1946.6075"
-       gradientTransform="matrix(3.6656377,0,0,0.29707509,0.13624179,-98.77197)"
+       gradientTransform="matrix(3.6656377,0,0,0.29707509,0.13624179,69.228034)"
        gradientUnits="userSpaceOnUse">
       <stop
          offset="0%"
@@ -137,6 +138,46 @@
          fill="#0066cc"
          id="polygon11" />
     </marker>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#tailscaleGradient"
+       id="linearGradient62"
+       x1="98.666323"
+       y1="720.66382"
+       x2="169.10069"
+       y2="791.09819"
+       gradientTransform="matrix(1.7179114,0,0,0.5821022,159.98331,19.701923)"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#tailscaleGradient"
+       id="linearGradient63"
+       x1="180.16063"
+       y1="720.66382"
+       x2="250.595"
+       y2="791.09819"
+       gradientTransform="matrix(1.7179114,0,0,0.5821022,159.98331,19.701923)"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#tailscaleGradient"
+       id="linearGradient64"
+       x1="261.65494"
+       y1="720.66382"
+       x2="332.08931"
+       y2="791.09819"
+       gradientTransform="matrix(1.7179114,0,0,0.5821022,159.98331,19.701923)"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#tailscaleGradient"
+       id="linearGradient65"
+       x1="343.14925"
+       y1="720.66382"
+       x2="413.58362"
+       y2="791.09819"
+       gradientTransform="matrix(1.7179114,0,0,0.5821022,159.98331,19.701923)"
+       gradientUnits="userSpaceOnUse" />
     <marker
        id="dataArrow-0"
        markerWidth="10"
@@ -165,7 +206,7 @@
      font-size="24px"
      font-weight="bold"
      fill="#333333"
-     id="text11">F5 XC Tailnet Egress - Architecture Diagram</text>
+     id="text11">F5 XC Tailnet Egress (envoy) - Architecture Diagram</text>
   <!-- F5 XC Layer -->
   <rect
      x="50"
@@ -353,14 +394,14 @@
      id="text24">Traffic Insights</text>
   <!-- Kubernetes Layer -->
   <rect
-     x="49.730808"
-     y="225.7308"
-     width="1100.5385"
-     height="117.2211"
-     rx="10.004894"
+     x="50.088745"
+     y="226.08875"
+     width="1099.8225"
+     height="284.53406"
+     rx="9.9983864"
      fill="url(#k8sGradient)"
      stroke="#333333"
-     stroke-width="1.28412"
+     stroke-width="2"
      id="rect24"
      style="fill:url(#k8sGradient)" />
   <text
@@ -373,155 +414,155 @@
      fill="#ffffff"
      id="text25">Kubernetes Layer</text>
   <!-- K8s Components - Top Row -->
-  <g
-     id="g3"
-     transform="translate(-69.72596)">
-    <rect
-       x="330"
-       y="266"
-       width="120"
-       height="60"
-       rx="5"
-       fill="#ffffff"
-       stroke="#333333"
-       stroke-width="1"
-       id="rect25" />
-    <text
-       x="390"
-       y="291"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="12px"
-       font-weight="bold"
-       fill="#333333"
-       id="text26">Service</text>
-    <text
-       x="390"
-       y="306"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="10px"
-       fill="#666666"
-       id="text27">Ports: 10000+</text>
-    <rect
-       x="470"
-       y="266"
-       width="120"
-       height="60"
-       rx="5"
-       fill="#ffffff"
-       stroke="#333333"
-       stroke-width="1"
-       id="rect27" />
-    <text
-       x="530"
-       y="291"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="12px"
-       font-weight="bold"
-       fill="#333333"
-       id="text28">RBAC</text>
-    <text
-       x="530"
-       y="306"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="10px"
-       fill="#666666"
-       id="text29">ServiceAccount, Role</text>
-    <rect
-       x="610"
-       y="266"
-       width="120"
-       height="60"
-       rx="5"
-       fill="#ffffff"
-       stroke="#333333"
-       stroke-width="1"
-       id="rect29" />
-    <text
-       x="670"
-       y="291"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="12px"
-       font-weight="bold"
-       fill="#333333"
-       id="text30">ConfigMaps</text>
-    <text
-       x="670"
-       y="306"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="10px"
-       fill="#666666"
-       id="text31">Proxy Config</text>
-    <rect
-       x="750"
-       y="266"
-       width="120"
-       height="60"
-       rx="5"
-       fill="#ffffff"
-       stroke="#333333"
-       stroke-width="1"
-       id="rect31" />
-    <text
-       x="810"
-       y="291"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="12px"
-       font-weight="bold"
-       fill="#333333"
-       id="text32">Secrets</text>
-    <text
-       x="810"
-       y="306"
-       text-anchor="middle"
-       font-family="Arial, sans-serif"
-       font-size="10px"
-       fill="#666666"
-       id="text33">Tailscale Keys</text>
-    <g
-       id="g1"
-       transform="translate(-2,-2)">
-      <g
-         id="g2"
-         transform="translate(144.95192,-66.346152)">
-        <rect
-           x="746.5"
-           y="333.5"
-           width="120"
-           height="60"
-           rx="5"
-           fill="#ffffff"
-           stroke="#333333"
-           stroke-width="1"
-           id="rect31-0" />
-        <text
-           x="806.5"
-           y="358.5"
-           text-anchor="middle"
-           font-family="Arial, sans-serif"
-           font-size="12px"
-           font-weight="bold"
-           fill="#333333"
-           id="text32-6">StatefulSet</text>
-        <text
-           x="806.5"
-           y="373.5"
-           text-anchor="middle"
-           font-family="Arial, sans-serif"
-           font-size="10px"
-           fill="#666666"
-           id="text33-5">ProxyContainer(s)</text>
-      </g>
-    </g>
-  </g>
+  <rect
+     x="330"
+     y="266"
+     width="120"
+     height="60"
+     rx="5"
+     fill="#ffffff"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect25" />
+  <text
+     x="390"
+     y="291"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="12px"
+     font-weight="bold"
+     fill="#333333"
+     id="text26">Service</text>
+  <text
+     x="390"
+     y="306"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     fill="#666666"
+     id="text27">Ports: 10000+</text>
+  <rect
+     x="470"
+     y="266"
+     width="120"
+     height="60"
+     rx="5"
+     fill="#ffffff"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect27" />
+  <text
+     x="530"
+     y="291"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="12px"
+     font-weight="bold"
+     fill="#333333"
+     id="text28">RBAC</text>
+  <text
+     x="530"
+     y="306"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     fill="#666666"
+     id="text29">ServiceAccount, Role</text>
+  <rect
+     x="610"
+     y="266"
+     width="120"
+     height="60"
+     rx="5"
+     fill="#ffffff"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect29" />
+  <text
+     x="670"
+     y="291"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="12px"
+     font-weight="bold"
+     fill="#333333"
+     id="text30">ConfigMaps</text>
+  <text
+     x="670"
+     y="306"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     fill="#666666"
+     id="text31">Proxy Config</text>
+  <rect
+     x="750"
+     y="266"
+     width="120"
+     height="60"
+     rx="5"
+     fill="#ffffff"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect31" />
+  <text
+     x="810"
+     y="291"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="12px"
+     font-weight="bold"
+     fill="#333333"
+     id="text32">Secrets</text>
+  <text
+     x="810"
+     y="306"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     fill="#666666"
+     id="text33">Tailscale Keys</text>
   <!-- StatefulSet Container - Centered -->
+  <rect
+     x="80.420128"
+     y="342.71249"
+     width="1039.1598"
+     height="152.53661"
+     rx="6.4947486"
+     fill="#ffffff"
+     stroke="#333333"
+     stroke-width="2.43092"
+     id="rect37" />
+  <text
+     x="597.59613"
+     y="365.80768"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="14px"
+     font-weight="bold"
+     fill="#333333"
+     id="text38">StatefulSet: Proxy Containers</text>
   <!-- Envoy Container inside StatefulSet (Top) -->
+  <rect
+     x="502.96136"
+     y="376"
+     width="180"
+     height="40"
+     rx="3"
+     fill="url(#proxyGradient)"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect38"
+     style="fill:url(#proxyGradient)" />
+  <text
+     x="592.67816"
+     y="398.52686"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     font-weight="bold"
+     fill="#ffffff"
+     id="text39">envoy</text>
   <text
      x="510"
      y="395"
@@ -534,7 +575,7 @@
   <!-- Tailscale Containers inside StatefulSet (Bottom) -->
   <text
      x="230"
-     y="374"
+     y="542"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="8px"
@@ -542,7 +583,7 @@
      id="text42">Port 10550</text>
   <text
      x="370"
-     y="374"
+     y="542"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="8px"
@@ -550,15 +591,95 @@
      id="text44">Port 10551</text>
   <text
      x="510"
-     y="374"
+     y="542"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="8px"
      fill="#ffffff"
      id="text46">Port 10552</text>
+  <rect
+     x="329.98331"
+     y="439.70193"
+     width="120"
+     height="40"
+     rx="3"
+     fill="url(#tailscaleGradient)"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect40"
+     style="fill:url(#linearGradient62)" />
+  <text
+     x="390.15421"
+     y="463.23465"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     font-weight="bold"
+     fill="#ffffff"
+     id="text41">tailscaled 0</text>
+  <rect
+     x="469.98331"
+     y="439.70193"
+     width="120"
+     height="40"
+     rx="3"
+     fill="url(#tailscaleGradient)"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect42"
+     style="fill:url(#linearGradient63)" />
+  <text
+     x="530.72064"
+     y="463.23709"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     font-weight="bold"
+     fill="#ffffff"
+     id="text43">tailscaled 1</text>
+  <rect
+     x="609.98334"
+     y="439.70193"
+     width="120"
+     height="40"
+     rx="3"
+     fill="url(#tailscaleGradient)"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect44"
+     style="fill:url(#linearGradient64)" />
+  <text
+     x="670.15912"
+     y="463.23709"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     font-weight="bold"
+     fill="#ffffff"
+     id="text45">tailscaled 2</text>
+  <rect
+     x="749.98334"
+     y="439.70193"
+     width="120"
+     height="40"
+     rx="3"
+     fill="url(#tailscaleGradient)"
+     stroke="#333333"
+     stroke-width="1"
+     id="rect46"
+     style="fill:url(#linearGradient65)" />
+  <text
+     x="810.1225"
+     y="463.23465"
+     text-anchor="middle"
+     font-family="Arial, sans-serif"
+     font-size="10px"
+     font-weight="bold"
+     fill="#ffffff"
+     id="text47">tailscaled 3</text>
   <text
      x="650"
-     y="374"
+     y="542"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="8px"
@@ -569,7 +690,7 @@
   <!-- Service Examples -->
   <rect
      x="50.132278"
-     y="391.3031"
+     y="559.3031"
      width="1099.913"
      height="87.124466"
      rx="9.9992085"
@@ -580,7 +701,7 @@
      style="fill:url(#serviceGradient)" />
   <text
      x="600.08875"
-     y="416.25958"
+     y="584.25958"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="18px"
@@ -589,7 +710,7 @@
      id="text51">Tailscale Network Services</text>
   <rect
      x="170.08873"
-     y="432.25958"
+     y="600.25958"
      width="200"
      height="30"
      rx="5"
@@ -599,7 +720,7 @@
      id="rect52" />
   <text
      x="270.08875"
-     y="452.25958"
+     y="620.25958"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="11px"
@@ -608,7 +729,7 @@
      id="text52">app.tailnet0.ts.net:80</text>
   <rect
      x="390.08875"
-     y="432.25958"
+     y="600.25958"
      width="200"
      height="30"
      rx="5"
@@ -618,7 +739,7 @@
      id="rect53" />
   <text
      x="490.08875"
-     y="452.25958"
+     y="620.25958"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="11px"
@@ -627,7 +748,7 @@
      id="text53">api.tailnet1.ts.net:3000</text>
   <rect
      x="610.08875"
-     y="432.25958"
+     y="600.25958"
      width="200"
      height="30"
      rx="5"
@@ -637,7 +758,7 @@
      id="rect54" />
   <text
      x="710.08875"
-     y="452.25958"
+     y="620.25958"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="11px"
@@ -646,7 +767,7 @@
      id="text54">db.tailnet2.ts.net:5432</text>
   <rect
      x="830.08875"
-     y="432.25958"
+     y="600.25958"
      width="200"
      height="30"
      rx="5"
@@ -656,7 +777,7 @@
      id="rect55" />
   <text
      x="930.08875"
-     y="452.25958"
+     y="620.25958"
      text-anchor="middle"
      font-family="Arial, sans-serif"
      font-size="11px"
@@ -676,9 +797,9 @@
      id="line56" />
   <line
      x1="600"
-     y1="346.65381"
+     y1="514.65381"
      x2="600"
-     y2="386.65381"
+     y2="554.65381"
      stroke="#0066cc"
      stroke-width="3"
      marker-end="url(#dataArrow-0)"
