@@ -18,16 +18,14 @@ spec:
     spec:
       containers:
         - name: envoy
-          image: envoyproxy/envoy-distroless:v1.34-latest
-          # image: regd.izpzi.com/envoyproxy/envoy-distroless:v1.34-latest
-          # Host your own cache or use mine above if experiencing dockerhub pull limits from F5XC
+          image: ${container_registry}/envoyproxy/envoy-distroless:v1.34-latest
           volumeMounts:
             - name: envoy-config
               mountPath: /etc/envoy
               readOnly: true
 %{ for index, tailnet in tailnets ~}
         - name: tailscale-${tailnet.tailnet_name}
-          image: ghcr.io/tailscale/tailscale
+          image: ${container_registry}/tailscale/tailscale:stable
           command: ['/bin/sh', '-c']
           args:
             - >-
@@ -42,7 +40,7 @@ spec:
             - name: TS_ACCEPT_DNS
               value: 'false'
             - name: TS_EXTRA_ARGS
-              value: --shields-up --advertise-tags=tag:f5xc-egress
+              value: --shields-up%{ if tailnet.tailnet_advertise_tags != null && tailnet.tailnet_advertise_tags != "" } --advertise-tags=${tailnet.tailnet_advertise_tags}%{ endif }
             - name: TS_OUTBOUND_HTTP_PROXY_LISTEN
               value: 'localhost:${10550 + index}'
             - name: TS_KUBE_SECRET

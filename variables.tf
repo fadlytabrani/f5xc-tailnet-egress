@@ -4,6 +4,12 @@ variable "k8s_namespace" {
   default     = "default"
 }
 
+variable "container_registry" {
+  description = "Alternative Docker registry to use for images"
+  type        = string
+  default     = "docker.io"
+}
+
 variable "tailnets" {
   description = "List of tailnets and the services that are going to be proxied"
   type = list(object({
@@ -13,6 +19,9 @@ variable "tailnets" {
 
     # Authentication key for the tailnet (can be OAuth key or Auth key).
     tailnet_key = string
+
+    # Advertise tags for the proxynode. Tags must already exist in the tailnet. Eg: "tag:server,tag:development"
+    tailnet_advertise_tags = optional(string)
 
     # Optional flag to use Kubernetes secret for the tailnet keys. This will generate associated manifests, such as secrets roles and rolebindings.
     use_k8s_secret = optional(bool, false)
@@ -34,6 +43,14 @@ variable "tailnets" {
 
       # F5 XC Origin Pool name that this endpoint will be associated with.
       f5xc_origin_pool = string
+
+      # F5 XC Virtual Site type, either "RE" or "CE".
+      f5xc_origin_pool_virtual_site = optional(object({
+        tenant    = optional(string, "ves-io")
+        namespace = optional(string, "shared")
+        name      = optional(string, "ves-io-all-res")
+        kind      = optional(string, "virtual-site")
+      }))
     }))
   }))
 

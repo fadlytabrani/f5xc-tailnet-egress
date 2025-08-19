@@ -74,8 +74,9 @@ resource "local_file" "envoy_statefulset" {
     ? "./envoy/k8s/statefulset-secrets.yaml.tftpl"
     : "./envoy/k8s/statefulset.yaml.tftpl",
     {
-      tailnets      = var.tailnets
-      k8s_namespace = var.k8s_namespace
+      tailnets           = var.tailnets
+      k8s_namespace      = var.k8s_namespace
+      container_registry = var.container_registry
     }
   )
   filename = "${path.module}/outputs/envoy/k8s/06-statefulset.yaml"
