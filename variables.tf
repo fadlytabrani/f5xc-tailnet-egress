@@ -5,7 +5,7 @@ variable "k8s_namespace" {
 }
 
 variable "container_registry" {
-  description = "Alternative Docker registry to use for images"
+  description = "Alternative to container registry to use for downloadingn images"
   type        = string
   default     = "docker.io"
 }
