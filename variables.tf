@@ -43,14 +43,6 @@ variable "tailnets" {
 
       # F5 XC Origin Pool name that this endpoint will be associated with.
       f5xc_origin_pool = string
-
-      # F5 XC Virtual Site type, either "RE" or "CE".
-      f5xc_origin_pool_virtual_site = optional(object({
-        tenant    = optional(string, "ves-io")
-        namespace = optional(string, "shared")
-        name      = optional(string, "ves-io-all-res")
-        kind      = optional(string, "virtual-site")
-      }))
     }))
   }))
 
