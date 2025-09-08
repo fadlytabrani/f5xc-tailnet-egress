@@ -1,0 +1,50 @@
+# Tailscaled Tailnet Egress Configuration Summary
+
+## Overview
+This configuration deploys a Tailscaled-based egress proxy for F5 XC integration with Tailscale networks.
+
+## Generated Resources
+
+### Kubernetes Manifests
+- **Namespace**: `${k8s_namespace}`
+- **Service**: `tailscale-egress` (Headless service)
+- **StatefulSet**: `tailscale-egress` (Tailscaled proxy containers)
+- **RBAC**: ServiceAccount, Role, RoleBinding (if using K8s secrets)
+
+### F5 XC Origin Pools
+%{ for service in all_services ~}
+- **${service.f5xc_origin_pool}-${pool_name_map[service.f5xc_origin_pool]}**
+  - Protocol: ${upper(service.protocol)}
+  - Service: ${service.service_endpoint}
+  - Port: ${service.exposed_port}
+%{ endfor ~}
+
+## Tailnet Configuration
+%{ for tailnet in tailnets ~}
+### ${tailnet.tailnet_name}
+- **Auth Method**: ${tailnet.use_k8s_secret ? "Kubernetes Secret" : "Direct Auth Key"}
+- **Advertise Tags**: ${tailnet.tailnet_advertise_tags != null && tailnet.tailnet_advertise_tags != "" ? tailnet.tailnet_advertise_tags : "None"}
+- **Services**: ${length(tailnet.services)} configured
+%{ for service in tailnet.services ~}
+  - ${service.endpoint}:${service.port} (${service.protocol}) → ${service.f5xc_origin_pool}
+%{ endfor ~}
+
+%{ endfor ~}
+
+## Deployment Instructions
+
+1. **Apply Kubernetes Manifests**:
+   ```bash
+   kubectl apply -f outputs/tailscaled/k8s/
+   ```
+
+2. **Create F5 XC Origin Pools**:
+   ```bash
+   # Use the generated JSON files in outputs/tailscaled/f5xc/
+   # Upload each JSON file to F5 XC API
+   ```
+
+## Notes
+- Tailscaled proxy supports HTTP and HTTPS protocols only
+- Each tailnet gets its own HTTP proxy listener on port 10550+
+- Services are routed through the Tailscaled HTTP proxy

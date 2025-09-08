@@ -46,16 +46,28 @@ locals {
 
 output "f5xc_origin_pools" {
   description = "F5 XC Origin Pool mappings for services"
-  value = [
-    for service in local.all_services : {
-      f5xc_origin_pool        = service.f5xc_origin_pool
-      f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
-      tailnet_name            = service.tailnet_name
-      endpoint                = service.endpoint
-      exposed_port            = 10000 + (service.tailnet_index * 1000) + service.service_index
-      service_endpoint        = "tailscale-egress.${var.k8s_namespace}:${10000 + (service.tailnet_index * 1000) + service.service_index}"
-    }
-  ]
+  value = concat(
+    [
+      for service in local.envoy_services : {
+        f5xc_origin_pool        = service.f5xc_origin_pool
+        f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.envoy_origin_pool_suffix[service.global_index].hex}"
+        tailnet_name            = service.tailnet_name
+        endpoint                = service.endpoint
+        exposed_port            = service.exposed_port
+        service_endpoint        = service.service_endpoint
+      }
+    ],
+    [
+      for service in local.tailscaled_services : {
+        f5xc_origin_pool        = service.f5xc_origin_pool
+        f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.tailscaled_origin_pool_suffix[service.global_index].hex}"
+        tailnet_name            = service.tailnet_name
+        endpoint                = service.endpoint
+        exposed_port            = service.exposed_port
+        service_endpoint        = service.service_endpoint
+      }
+    ]
+  )
 }
 
 output "k8s_namespace" {
@@ -80,16 +92,28 @@ output "kubernetes_manifests" {
 
 output "origin_pool_configs" {
   description = "Generated F5 XC origin pool JSON configuration file paths"
-  value = [
-    for service in local.all_services : {
-      f5xc_origin_pool        = service.f5xc_origin_pool
-      f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
-      json_file_path          = "${path.module}/outputs/envoy/f5xc/${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}.json"
-      tailnet_name            = service.tailnet_name
-      service_endpoint        = service.service_endpoint
-      exposed_port            = service.exposed_port
-    }
-  ]
+  value = concat(
+    [
+      for service in local.envoy_services : {
+        f5xc_origin_pool        = service.f5xc_origin_pool
+        f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.envoy_origin_pool_suffix[service.global_index].hex}"
+        json_file_path          = "${path.module}/outputs/envoy/f5xc/${service.f5xc_origin_pool}-${random_id.envoy_origin_pool_suffix[service.global_index].hex}.json"
+        tailnet_name            = service.tailnet_name
+        service_endpoint        = service.service_endpoint
+        exposed_port            = service.exposed_port
+      }
+    ],
+    [
+      for service in local.tailscaled_services : {
+        f5xc_origin_pool        = service.f5xc_origin_pool
+        f5xc_origin_pool_unique = "${service.f5xc_origin_pool}-${random_id.tailscaled_origin_pool_suffix[service.global_index].hex}"
+        json_file_path          = "${path.module}/outputs/tailscaled/f5xc/${service.f5xc_origin_pool}-${random_id.tailscaled_origin_pool_suffix[service.global_index].hex}.json"
+        tailnet_name            = service.tailnet_name
+        service_endpoint        = service.service_endpoint
+        exposed_port            = service.exposed_port
+      }
+    ]
+  )
 }
 
 output "documentation" {

@@ -32,7 +32,7 @@ variable "tailnets" {
       # IP address or hostname of the endpoint in the tailnet.
       endpoint = string
 
-      # Protocol of the service, either "tcp" or "udp".
+      # Protocol of the service, either "tcp", "udp", "http", or "https".
       protocol = string
 
       # Port number of the service in the tailnet.
@@ -59,9 +59,9 @@ variable "tailnets" {
       for tailnet in var.tailnets :
       alltrue([
         for service in tailnet.services :
-        contains(["tcp", "udp"], service.protocol)
+        contains(["tcp", "udp", "http", "https"], service.protocol)
       ])
     ])
-    error_message = "Service protocol must be either 'tcp' or 'udp'."
+    error_message = "Service protocol must be either 'tcp', 'udp', 'http', or 'https'."
   }
 }

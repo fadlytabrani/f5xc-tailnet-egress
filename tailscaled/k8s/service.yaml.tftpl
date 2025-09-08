@@ -1,0 +1,18 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tailscale-egress
+  labels:
+    app: tailscale-egress
+spec:
+  clusterIP: None
+  selector:
+    app: tailscale-egress
+  ports:
+%{ for tailnet_index, tailnet in tailnets ~}
+    - name: ${tailnet.tailnet_name}-http-rproxy
+      protocol: TCP
+      port: ${10550 + tailnet_index}
+      targetPort: ${10550 + tailnet_index}
+%{ endfor ~}
