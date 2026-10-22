@@ -1,67 +1,104 @@
 # F5 XC Tailnet Egress
 
-A modular Terraform-based solution to generate Kubernetes manifests and F5 Distributed Cloud (F5 XC) Origin Pool configurations for connecting F5 XC workloads to multiple Tailscale networks using containerized proxies.
+<div align="center">
 
-## 🌟 Features
+**Connect F5 Distributed Cloud workloads seamlessly to multiple Tailscale networks (Tailnets) using high-performance, Kubernetes-native proxy engines.**
 
-- **Multi-Tailnet Support**: Connect to multiple Tailscale networks simultaneously with complete isolation
-- **Pluggable Proxy Architectures**:
-  - **[Proxtail](docs/proxtail.md) (Recommended)**: High-performance userspace `tsnet` Layer 4 reverse proxy in a single container. Native **TCP and UDP** support, automatic OAuth tag discovery, Prometheus metrics, and ephemeral node cleanup.
-  - **[Envoy](docs/envoy.md)**: Enterprise L4 TCP proxy with HTTP CONNECT tunneling to local Tailscale sidecar containers.
-- **StatefulSet Native**: Predictable pod identities (`tailscale-egress-0`) ensuring clean, deterministic node names in the Tailscale Admin Console
-- **Kubernetes Native**: Complies with standard Kubernetes RBAC, Secrets, ConfigMaps, and Pod Security Standards
-- **Dynamic Configuration**: Automatic port allocation, F5 XC Origin Pool mapping, and service discovery
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
+[![Terraform](https://img.shields.io/badge/Terraform-%3E%3D%201.0-623CE4.svg?logo=terraform&logoColor=white)](https://www.terraform.io/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Native-326CE5.svg?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![Tailscale](https://img.shields.io/badge/Tailscale-Mesh%20VPN-black.svg?logo=tailscale&logoColor=white)](https://tailscale.com/)
+[![F5 XC](https://img.shields.io/badge/F5%20XC-Distributed%20Cloud-E2231A.svg)](https://cloud.f5.com/)
 
-## 🏗️ Architecture
-
-![Architecture Diagram](docs/images/architecture.svg)
-
-### **🔍 Architecture Components Explained:**
-
-#### **F5 XC Layer**
-
-- **Origin Pools**: Define backend services pointing to the Kubernetes egress proxy
-- **Health Checks**: Monitor service availability and routing health
-- **Traffic Distribution**: Route requests based on routing policies
-- **Security Policies**: WAF, DDoS protection, and security controls
-- **Global Load Balancer**: Multi-region traffic distribution
-
-#### **Kubernetes Layer**
-
-- **Service**: Headless Service (`clusterIP: None`) exposing ports (`10000+`)
-- **StatefulSet**: Main proxy deployment (`tailscale-egress`)
-- **ConfigMap**: Proxy configuration template (`config.yaml` for Proxtail, `envoy.yaml` for Envoy)
-- **Secrets**: Secure storage of Tailscale authentication keys
-- **RBAC**: ServiceAccount, Role, and RoleBinding (when secrets are enabled)
-
-#### **Tailscale Network Services**
-
-- **Tailscale Nodes**: Nodes residing across multiple independent tailnets
-- **Tailscale MagicDNS**: Services accessible via Tailscale hostnames or IP addresses
-- **Port Mapping**: Internal service ports preserved through the proxy
-- **Protocol Support**: TCP and UDP (via Proxtail), TCP tunneling (via Envoy)
+</div>
 
 ---
 
-## 🚀 Deployment Quick Start
+## 🌟 Overview
 
-> **Note**: The deployment script uses `kubectl` to apply configuration. Make sure it has been initialized with the appropriate KubeConfig credentials for your F5 XC site: [F5 XC Credentials Documentation](https://docs.cloud.f5.com/docs-v2/administration/how-tos/user-mgmt/Credentials).
+**F5 XC Tailnet Egress** bridges the enterprise security and global distribution of **F5 Distributed Cloud (F5 XC)** with the zero-trust mesh networking of **Tailscale**. 
 
-### 1. Clone the repository
+Using Terraform, this solution automatically provisions F5 XC Origin Pools and renders production-ready Kubernetes manifests for proxying traffic into private Tailscale networks. It supports multiple isolated tailnets simultaneously with zero IP collision concerns.
+
+### Why Combine F5 Distributed Cloud & Tailscale?
+
+- 🌐 **Global Anycast Edge**: Deliver enterprise traffic through F5 XC's high-speed global network backbone across Regional Edges (RE) and Customer Edges (CE).
+- 🛡️ **Comprehensive App Security**: Protect private Tailscale backends with F5 XC's industry-leading Web Application Firewall (WAF), API protection, Bot Defense, and DDoS mitigation.
+- 🔒 **Zero-Trust Egress**: Keep backend services completely private inside your Tailnet without exposing public ingress ports or managing complex VPN gateways.
+- ⚡ **Pluggable High-Speed Proxies**: Choose between the ultra-lightweight **[Proxtail](docs/proxtail.md)** proxy (native TCP & UDP) or the enterprise **[Envoy](docs/envoy.md)** L4 proxy.
+
+---
+
+## 🏗️ Architecture & Traffic Flow
+
+```mermaid
+flowchart LR
+    subgraph F5XC["F5 Distributed Cloud (RE / CE)"]
+        LB["Global Load Balancer<br/>WAF & Security Policies"]
+        OP["Origin Pools<br/>(Dynamic Port Mapping)"]
+        LB --> OP
+    end
+
+    subgraph K8S["Kubernetes Cluster / F5 XC vk8s"]
+        SVC["Service: tailscale-egress<br/>(Ports 10000+)"]
+        POD["StatefulSet: tailscale-egress<br/>(Proxtail or Envoy)"]
+        OP -- "TCP / UDP" --> SVC
+        SVC --> POD
+    end
+
+    subgraph TS["Tailscale Mesh Networks"]
+        T0["Tailnet A: Production<br/>(e.g., app.tailnet0.ts.net:80)"]
+        T1["Tailnet B: Analytics<br/>(e.g., db.tailnet1.ts.net:5432)"]
+        POD -- "WireGuard Mesh" --> T0
+        POD -- "WireGuard Mesh" --> T1
+    end
+```
+
+![Architecture Diagram](docs/images/architecture.svg)
+
+---
+
+## ⚡ Pluggable Proxy Engines
+
+Choose the proxy architecture that best matches your application needs:
+
+| Feature | [Proxtail Solution](docs/proxtail.md) *(Recommended)* | [Envoy Solution](docs/envoy.md) |
+| :--- | :--- | :--- |
+| **Engine** | Userspace [`tsnet`](https://pkg.go.dev/tailscale.com/tsnet) WireGuard engine | Envoy L4 TCP Proxy + Tailscale Sidecars |
+| **Pod Footprint** | **Single container** (ultra-low CPU/memory) | $N+1$ containers (1 Envoy + $N$ Tailscale sidecars) |
+| **Protocols** | **TCP & UDP** natively supported | **TCP only** (HTTP CONNECT tunneling) |
+| **Security Context** | Unprivileged non-root (`UID 10001`), `restricted` profile | Unprivileged userspace containers |
+| **Observability** | Native `/healthz`, `/readyz`, & `/metrics` (port 9000) | Standard Envoy admin & telemetry |
+| **Lifecycle** | Ephemeral nodes with instant clean logout (`< 150ms`) | Containerboot ephemeral lifecycle |
+
+---
+
+## 🚀 Quick Start Guide
+
+### Prerequisites
+
+- [Terraform](https://www.terraform.io/) >= 1.0
+- Access to an **F5 Distributed Cloud** environment with `kubectl` configured ([F5 XC Credentials Guide](https://docs.cloud.f5.com/docs-v2/administration/how-tos/user-mgmt/Credentials))
+- Tailscale authentication keys (marked **Reusable** or OAuth Client Secrets)
+
+---
+
+### Step 1: Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/fadlytabrani/f5xc-tailnet-egress.git
 cd f5xc-tailnet-egress
 ```
 
-### 2. Configure your tailnets
+### Step 2: Configure Your Tailnets
+
+Copy the example variables file:
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your tailnet configurations
 ```
 
-#### Multi-Tailnet Configuration Example
+Edit `terraform.tfvars` with your tailnet services:
 
 ```hcl
 proxy_type    = "proxtail" # "proxtail" (recommended) or "envoy"
@@ -71,11 +108,11 @@ tailnets = [
   {
     tailnet_name   = "tailnet0"
     tailnet_key    = "tskey-auth-..."  # Reusable Tailscale auth key or OAuth client secret
-    use_k8s_secret = true              # Enable Secret and RBAC management
+    use_k8s_secret = true              # Enable Kubernetes Secret & RBAC management
     services = [
       {
         endpoint         = "app.tailnet0.ts.net"
-        protocol         = "tcp"             # "tcp" or "udp" (Proxtail supports both)
+        protocol         = "tcp"
         port             = 80
         connection_timeout = 10
         f5xc_origin_pool = "tailnet0-web-pool"
@@ -89,7 +126,7 @@ tailnets = [
     services = [
       {
         endpoint         = "dns.tailnet1.ts.net"
-        protocol         = "udp"             # UDP supported natively with proxtail
+        protocol         = "udp"       # UDP supported natively with proxtail!
         port             = 53
         f5xc_origin_pool = "tailnet1-dns-pool"
       }
@@ -98,80 +135,111 @@ tailnets = [
 ]
 ```
 
-### 3. Deploy the egress service
+### Step 3: Deploy
+
+Run the automated deployment script:
 
 ```bash
 # Deploy with default proxy (proxtail)
 ./deploy.sh
 
-# Or deploy explicitly by proxy type
+# Or select a proxy explicitly
 ./deploy.sh --proxy proxtail
 ./deploy.sh --proxy envoy
 ```
 
-#### Phase 1: Infrastructure Provisioning (Terraform)
-1. **Initialize Terraform** - Discovers providers and child modules (`modules/f5xc`, `modules/proxtail`, `modules/envoy`)
-2. **Validate Configuration** - Verifies syntax and protocol compatibility
-3. **Generate Files**:
-   - Kubernetes manifests in `outputs/<proxy_type>/k8s/`
-   - F5 XC origin pool JSONs in `outputs/<proxy_type>/f5xc/`
-   - Configuration summary in `outputs/<proxy_type>/configuration-summary.md`
-
-#### Phase 2: Application Deployment (Kubernetes + F5 XC)
-1. **Start kubectl Proxy** - Connects to F5 XC API on `localhost:8001`
-2. **Create Origin Pools** - Submits origin pool configurations to F5 XC
-3. **Apply Kubernetes Manifests** - Applies ConfigMap, Service, Secrets, and StatefulSet
-4. **Verify Deployment** - Displays live status and connection instructions
+The script will:
+1. Initialize Terraform and validate your configuration.
+2. Cleanly generate Kubernetes manifests in `outputs/<proxy_type>/k8s/` and F5 XC Origin Pool JSONs in `outputs/<proxy_type>/f5xc/`.
+3. Provide a configuration summary for review.
+4. Establish an F5 XC API proxy session and automatically apply Origin Pools and Kubernetes manifests.
 
 ---
 
-## 🔧 Port Allocations
+## 🔧 Port Allocation Scheme
 
-The egress service uses a systematic, conflict-free port allocation scheme:
+The egress service uses a deterministic port allocation formula that avoids collisions across tailnets:
 
-- **Service Ports**: `10000 + (tailnet_index * 1000) + service_index`
+$$\text{Exposed Port} = 10000 + (\text{tailnet\_index} \times 1000) + \text{service\_index}$$
 
-Example:
-- Tailnet 0: ports 10000–10999
-- Tailnet 1: ports 11000–11999
-- Tailnet 2: ports 12000–12999
-
----
-
-## 🔐 Security Features
-
-- **Unprivileged Userspace Execution**: Proxtail runs under non-root UID `10001` without `CAP_NET_ADMIN` or `/dev/net/tun`.
-- **RBAC Integration**: Automatic ServiceAccount, Role, and RoleBinding generation.
-- **Secret Management**: Storage of Tailscale credentials in Kubernetes Secret objects.
+| Tailnet Index | Service Index | Protocol | Exposed Port | Target Backend Example |
+| :---: | :---: | :---: | :---: | :--- |
+| `0` (Tailnet A) | `0` | TCP | `10000` | `app.tailnet0.ts.net:80` |
+| `0` (Tailnet A) | `1` | TCP | `10001` | `api.tailnet0.ts.net:3000` |
+| `1` (Tailnet B) | `0` | UDP | `11000` | `dns.tailnet1.ts.net:53` |
+| `1` (Tailnet B) | `1` | TCP | `11001` | `db.tailnet1.ts.net:5432` |
+| `2` (Tailnet C) | `0` | TCP | `12000` | `internal.tailnet2.ts.net:8443` |
 
 ---
 
-## 📖 Proxy Implementations
+## 📋 Configuration Reference
 
-- **[Proxtail Solution](docs/proxtail.md)**: Embedded `tsnet` proxy with native TCP & UDP support, single container per pod, and low resource overhead.
-- **[Envoy Solution](docs/envoy.md)**: L4 TCP proxy with HTTP CONNECT tunneling over local Tailscale sidecar containers.
+| Variable | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `proxy_type` | `string` | `"proxtail"` | Proxy engine to deploy: `"proxtail"` or `"envoy"`. |
+| `k8s_namespace` | `string` | `"default"` | Target Kubernetes namespace for manifests and origin pools. |
+| `container_registry` | `string` | `"docker.io"` | Container registry mirror for pulling proxy images. |
+| `tailnets` | `list(object)` | *(required)* | List of tailnet configurations and backend services. |
+| `tailnets[].tailnet_name` | `string` | *(required)* | Unique identifier for the tailnet. |
+| `tailnets[].tailnet_key` | `string` | *(required)* | Reusable Tailscale auth key (`tskey-auth-...`) or OAuth secret (`tskey-client-...`). |
+| `tailnets[].use_k8s_secret`| `bool` | `false` | When `true`, stores credentials in Kubernetes `Secret` objects. |
+| `tailnets[].tailnet_advertise_tags` | `string` | `null` | Optional comma-separated ACL tags (e.g. `"tag:proxy,tag:prod"`). |
+| `tailnets[].services[].endpoint` | `string` | *(required)* | Target backend hostname (MagicDNS) or Tailscale IP. |
+| `tailnets[].services[].protocol` | `string` | `"tcp"` | Service protocol: `"tcp"` or `"udp"`. |
+| `tailnets[].services[].port` | `number` | *(required)* | Destination port on the target tailnet backend. |
+| `tailnets[].services[].f5xc_origin_pool` | `string` | *(required)* | F5 XC Origin Pool name. |
+| `tailnets[].services[].connection_timeout` | `number` | `5` | Upstream connection timeout in seconds. |
 
 ---
 
-## 🛠️ Requirements
+## 🔍 Day-2 Operations & Verification
 
-- Terraform >= 1.0
-- Kubernetes cluster (or F5 XC vk8s / site cluster) with RBAC enabled
-- Tailscale authentication keys (marked **Reusable** or OAuth client secrets)
-- F5 Distributed Cloud access
+Once deployed, verify your proxy and test traffic flow with standard `kubectl` commands:
 
-## 🌐 Kubernetes Compatibility
+```bash
+# Check StatefulSet and Pod health
+kubectl get statefulset,svc -l app=tailscale-egress -n default
 
-These solutions can be deployed on standard Kubernetes distributions as well as F5 XC virtual sites.
+# Stream proxy logs
+# For Proxtail:
+kubectl logs -l app=tailscale-egress -c proxtail -n default -f
 
-## 🏢 F5 XC Deployment Options
+# For Envoy:
+kubectl logs -l app=tailscale-egress -c envoy -n default -f
 
-On F5 Distributed Cloud (F5 XC), these solutions can be deployed on:
-- **Regional Edges (RE)**: Centralized multi-region traffic routing
-- **Customer Edges (CE)**: Local on-premises or cloud edge sites
+# Check Proxtail live health and readiness probes
+kubectl exec -it statefulset/tailscale-egress -n default -- wget -qO- http://localhost:9000/readyz
+
+# Query Prometheus metrics (Proxtail)
+kubectl exec -it statefulset/tailscale-egress -n default -- wget -qO- http://localhost:9000/metrics
+
+# Test local connectivity via port-forwarding
+kubectl port-forward svc/tailscale-egress 10000:10000 -n default
+curl http://localhost:10000
+```
+
+---
+
+## 🏢 F5 Distributed Cloud Integration Highlights
+
+- **Global High Availability**: Deploy origin pools across F5 XC **Regional Edges (RE)** for globally distributed multi-region traffic routing, or on **Customer Edges (CE)** for local edge/on-prem environments.
+- **Deep Kubernetes Integration**: Origin pools integrate directly with Kubernetes DNS and service discovery via F5 XC vk8s.
+- **Advanced Observability**: Leverage F5 XC's integrated telemetry, latency metrics, and traffic analytics alongside Prometheus proxy metrics.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to open an issue or submit a pull request.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/new-proxy`)
+3. Commit your changes (`git commit -m "Add new proxy"`)
+4. Push to your branch (`git push origin feature/new-proxy`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for details.
+This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for full details.
