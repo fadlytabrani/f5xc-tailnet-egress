@@ -1,0 +1,32 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tailscale-egress-proxtail
+  labels:
+    app: tailscale-egress
+    proxy: proxtail
+data:
+  config.yaml: |
+    proxy:
+      health_port: 9000
+      metrics_interval: 60
+    tailnets:
+%{ for tailnet_index, tailnet in tailnets ~}
+      - name: "${tailnet.tailnet_name}"
+        hostname: "proxtail-${tailnet.tailnet_name}-$${HOSTNAME}"
+        ephemeral: true
+%{ if tailnet.tailnet_advertise_tags != null && tailnet.tailnet_advertise_tags != "" ~}
+        tags:
+%{ for tag in split(",", tailnet.tailnet_advertise_tags) ~}
+          - "${trimspace(tag)}"
+%{ endfor ~}
+%{ endif ~}
+        ports:
+%{ for service_index, service in tailnet.services ~}
+          - port: ${10000 + (tailnet_index * 1000) + service_index}
+            destination: "${service.endpoint}:${service.port}"
+            protocol: "${lower(service.protocol)}"
+            timeout: ${coalesce(service.connection_timeout, 30)}
+%{ endfor ~}
+%{ endfor ~}

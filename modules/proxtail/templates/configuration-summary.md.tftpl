@@ -1,0 +1,80 @@
+# F5 XC Tailnet Egress - Configuration Summary (Proxtail)
+
+## Overview
+- **Proxy Type**: Proxtail (High-performance userspace `tsnet` Layer 4 reverse proxy)
+- **Kubernetes Namespace**: ${k8s_namespace}
+- **Workload Type**: StatefulSet (`tailscale-egress`)
+- **Key Features**:
+  - Single-container architecture (no sidecar container chaining)
+  - Native **TCP and UDP** multi-tailnet proxying
+  - Ephemeral Tailscale nodes (auto-deregisters on pod termination)
+  - Prometheus metrics (`/metrics`) and health checks (`/healthz`, `/readyz`) on port 9000
+
+## Deployment Process
+
+### Phase 1: Infrastructure Provisioning (Terraform)
+1. **Initialize Terraform** - Set up working directory and providers
+2. **Validate Configuration** - Verify Terraform syntax and configuration
+3. **Generate Manifests**:
+   - Kubernetes manifests in `outputs/proxtail/k8s/`
+   - F5 XC origin pool JSONs in `outputs/proxtail/f5xc/`
+   - This configuration summary
+
+### Phase 2: Application Deployment (Kubernetes + F5 XC)
+1. **Start kubectl Proxy** - Establish connection to Kubernetes cluster
+2. **Create F5 XC Origin Pools** - Deploy origin pools via F5 XC API
+3. **Apply Kubernetes Manifests** - Deploy all Kubernetes resources
+4. **Verify Deployment** - Check resource status and health
+
+## Objects That Will Be Created
+
+### F5 XC Objects
+%{ for tailnet_index, tailnet in tailnets ~}
+%{ for service_index, service in tailnet.services ~}
+- **Origin Pool**: `${pool_name_map[service.f5xc_origin_pool]}`
+  - Namespace: `${k8s_namespace}`
+  - Backend: `tailscale-egress.${k8s_namespace}:${10000 + (tailnet_index * 1000) + service_index}`
+  - Protocol: ${upper(service.protocol)}
+%{ endfor ~}
+%{ endfor ~}
+
+### Kubernetes Resources
+- **ServiceAccount**: `tailscale-egress` (if using k8s secrets)
+- **Role**: `tailscale-egress` (RBAC permissions if using secrets)
+- **RoleBinding**: `tailscale-egress` (bind role to service account)
+- **Secrets**: Tailscale authentication keys for each tailnet (if enabled)
+- **ConfigMap**: `tailscale-egress-proxtail`
+- **Service**: `tailscale-egress` (Headless with TCP/UDP multi-port mapping + port 9000 health)
+- **StatefulSet**: `tailscale-egress` (single proxtail container)
+
+### Manifest Files Applied
+1. `00-secrets.yaml` - Tailscale authentication secrets (if enabled)
+2. `01-serviceaccount.yaml` - Service account for the application (if enabled)
+3. `02-role.yaml` - RBAC role definition (if enabled)
+4. `03-rolebinding.yaml` - Role binding to service account (if enabled)
+5. `04-service.yaml` - Kubernetes service definition (TCP & UDP)
+6. `05-configmap.yaml` - Proxtail YAML configuration
+7. `06-statefulset.yaml` - Proxtail StatefulSet
+
+## Verification Commands
+
+```bash
+# Check service status
+kubectl get service tailscale-egress -n ${k8s_namespace}
+
+# Check pod status
+kubectl get pods -l app=tailscale-egress -n ${k8s_namespace}
+
+# Check Proxtail logs
+kubectl logs -l app=tailscale-egress -c proxtail -n ${k8s_namespace}
+
+# Check health and readiness probes
+kubectl exec -it statefulset/tailscale-egress -n ${k8s_namespace} -- wget -qO- http://localhost:9000/readyz
+
+# Port forward for testing
+%{ for tailnet_index, tailnet in tailnets ~}
+%{ for service_index, service in tailnet.services ~}
+kubectl port-forward svc/tailscale-egress ${10000 + (tailnet_index * 1000) + service_index}:${10000 + (tailnet_index * 1000) + service_index} -n ${k8s_namespace}
+%{ endfor ~}
+%{ endfor ~}
+```

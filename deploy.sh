@@ -4,10 +4,23 @@
 
 set -e
 
-# Parse command line arguments
+# Default configuration
+PROXY_TYPE=${PROXY_TYPE:-"proxtail"}
 VERBOSE=false
+NAMESPACE=""
+PROXY_PID=""
+
+# Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -p|--proxy)
+            PROXY_TYPE="$2"
+            shift 2
+            ;;
+        --proxy=*)
+            PROXY_TYPE="${1#*=}"
+            shift
+            ;;
         --verbose)
             VERBOSE=true
             shift
@@ -16,12 +29,15 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --verbose    Show verbose Terraform output"
-            echo "  -h, --help   Show this help message"
+            echo "  -p, --proxy <type>   Proxy implementation to deploy: 'proxtail' (default) or 'envoy'"
+            echo "  --verbose            Show verbose Terraform output"
+            echo "  -h, --help           Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0              # Run with minimal output (default)"
-            echo "  $0 --verbose    # Run with verbose Terraform output"
+            echo "  $0                      # Deploy with default proxy (proxtail)"
+            echo "  $0 --proxy proxtail     # Explicitly deploy proxtail"
+            echo "  $0 --proxy envoy        # Deploy envoy proxy solution"
+            echo "  $0 --verbose            # Run with verbose output"
             exit 0
             ;;
         *)
@@ -32,10 +48,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Configuration
-PROXY_TYPE=${PROXY_TYPE:-"envoy"}
-NAMESPACE=""
-PROXY_PID=""
+# Validate proxy type
+if [[ "$PROXY_TYPE" != "proxtail" && "$PROXY_TYPE" != "envoy" ]]; then
+    echo "Error: Invalid proxy type '$PROXY_TYPE'. Must be 'proxtail' or 'envoy'."
+    exit 1
+fi
 
 # Enhanced color palette
 RED='\033[0;31m'
@@ -59,10 +76,6 @@ BG_RED='\033[41m'
 BANNER="
 ${BOLD}${CYAN}🚀 F5 XC Tailnet Egress Deployment${NC}
 "
-
-
-
-
 
 # Enhanced logging functions
 log_header() { 
@@ -139,11 +152,9 @@ check_prerequisites() {
     fi
     
     if [ ! -f "terraform.tfvars" ]; then
-        log_error "terraform.tfvars not found. Please configure it first."
+        log_error "terraform.tfvars not found. Please create it first (e.g. cp terraform.tfvars.example terraform.tfvars)."
         exit 1
     fi
-    
-
     
     log_success "All prerequisites satisfied"
     show_separator
@@ -151,7 +162,7 @@ check_prerequisites() {
 
 # Terraform operations
 run_terraform() {
-    log_header "TERRAFORM DEPLOYMENT"
+    log_header "TERRAFORM DEPLOYMENT ($PROXY_TYPE)"
     
     log_step "Initializing Terraform..."
     if [ "$VERBOSE" = true ]; then
@@ -168,12 +179,15 @@ run_terraform() {
         terraform validate -compact-warnings > /dev/null 2>&1
     fi
     log_success "validate completed"
+
+    # Clean target proxy output directory to avoid stale manifests
+    rm -rf "outputs/$PROXY_TYPE"
     
-    log_step "Applying Terraform configuration..."
+    log_step "Applying Terraform configuration for proxy '$PROXY_TYPE'..."
     if [ "$VERBOSE" = true ]; then
-        terraform apply --auto-approve
+        terraform apply --auto-approve -var="proxy_type=$PROXY_TYPE"
     else
-        terraform apply --auto-approve -compact-warnings > /dev/null 2>&1
+        terraform apply --auto-approve -var="proxy_type=$PROXY_TYPE" -compact-warnings > /dev/null 2>&1
     fi
     log_success "Terraform deployment complete"
     show_separator
@@ -212,22 +226,18 @@ start_proxy() {
     show_separator
 }
 
-
-
 # Create origin pools
 create_origin_pools() {
     log_header "F5 XC OBJECT CREATION"
     
-    local pools_dir="outputs/envoy/f5xc"
-    
-
-    
+    local pools_dir="outputs/$PROXY_TYPE/f5xc"
     local created=0
     
-    log_progress "Creating origin pools..."
+    log_progress "Creating origin pools from $pools_dir..."
     
-    # Find all JSON files in the pools directory
-    local json_files=($pools_dir/*.json)
+    shopt -s nullglob
+    local json_files=("$pools_dir"/*.json)
+    shopt -u nullglob
     
     if [ ${#json_files[@]} -eq 0 ]; then
         log_error "No JSON files found in $pools_dir"
@@ -238,7 +248,6 @@ create_origin_pools() {
     
     for json_file in "${json_files[@]}"; do
         if [ -f "$json_file" ]; then
-            # Extract the origin pool name from the filename (without .json extension)
             local unique_name=$(basename "$json_file" .json)
             
             log_info "Creating: ${BOLD}$unique_name${NC}"
@@ -263,16 +272,24 @@ create_origin_pools() {
         fi
     done
     
-    log_success "All origin pools created successfully"
+    log_success "All origin pools created successfully ($created created)"
     show_separator
 }
 
 # Apply Kubernetes manifests
 apply_manifests() {
-    log_header "KUBERNETES DEPLOYMENT"
+    log_header "KUBERNETES DEPLOYMENT ($PROXY_TYPE)"
     
-    local manifests_dir="outputs/envoy/k8s"
-    local manifest_files=($manifests_dir/*.yaml)
+    local manifests_dir="outputs/$PROXY_TYPE/k8s"
+    
+    shopt -s nullglob
+    local manifest_files=("$manifests_dir"/*.yaml)
+    shopt -u nullglob
+    
+    if [ ${#manifest_files[@]} -eq 0 ]; then
+        log_error "No manifest files found in $manifests_dir"
+        exit 1
+    fi
     
     log_progress "Applying Kubernetes manifests..."
     
@@ -280,7 +297,6 @@ apply_manifests() {
         if [ -f "$manifest" ]; then
             local basename=$(basename "$manifest")
             log_info "Applying: ${BOLD}$basename${NC}"
-            
             kubectl apply -f "$manifest" -n "$NAMESPACE"
         fi
     done
@@ -298,7 +314,7 @@ show_troubleshooting_tips() {
     echo -e "${BOLD}${CYAN}F5 XC OBJECT CREATION:${NC}"
     echo -e "  • Most errors occur when trying to create objects that already exist"
     echo -e "  • Solution: Run ${BOLD}terraform destroy${NC} to clean up existing resources"
-    echo -e "  • Then retry: ${BOLD}./deploy.sh${NC}\n"
+    echo -e "  • Then retry: ${BOLD}./deploy.sh --proxy $PROXY_TYPE${NC}\n"
 
     echo -e "${BOLD}${CYAN}KUBERNETES CONNECTION:${NC}"
     echo -e "  • Ensure kubeconfig is valid and not expired"
@@ -314,7 +330,7 @@ show_troubleshooting_tips() {
 
 # Show deployment status
 show_status() {
-    log_header "DEPLOYMENT STATUS"
+    log_header "DEPLOYMENT STATUS ($PROXY_TYPE)"
     
     log_progress "Checking resource status..."
     
@@ -328,7 +344,12 @@ show_status() {
     
     echo -e "${BOLD}${WHITE}Next Steps:${NC}"
     echo -e "  ${CYAN}📊${NC} Check pod status: ${BOLD}kubectl get pods -l app=tailscale-egress -n $NAMESPACE${NC}"
-    echo -e "  ${CYAN}📋${NC} View logs: ${BOLD}kubectl logs -l app=tailscale-egress -c tailscale-<tailnet-name> -n $NAMESPACE${NC}"
+    if [ "$PROXY_TYPE" = "proxtail" ]; then
+        echo -e "  ${CYAN}📋${NC} View logs: ${BOLD}kubectl logs -l app=tailscale-egress -c proxtail -n $NAMESPACE${NC}"
+        echo -e "  ${CYAN}🏥${NC} Check health: ${BOLD}kubectl exec -it statefulset/tailscale-egress -n $NAMESPACE -- wget -qO- http://localhost:9000/readyz${NC}"
+    else
+        echo -e "  ${CYAN}📋${NC} View logs: ${BOLD}kubectl logs -l app=tailscale-egress -c envoy -n $NAMESPACE${NC}"
+    fi
     echo -e "  ${CYAN}🔗${NC} Port forward: ${BOLD}kubectl port-forward svc/tailscale-egress <local-port>:<service-port> -n $NAMESPACE${NC}"
     
     show_separator
@@ -339,7 +360,7 @@ main() {
     clear
     echo -e "$BANNER"
     echo -e "${BOLD}${WHITE}Proxy Type:${NC} ${CYAN}$PROXY_TYPE${NC}"
-    echo -e "${BOLD}${WHITE}Timestamp:${NC} ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
+    echo -e "${BOLD}${WHITE}Timestamp:${NC}  ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
     show_separator
     
     # Set trap for cleanup
@@ -349,24 +370,19 @@ main() {
     run_terraform
     
     echo -e "\n${BOLD}${YELLOW}🤔 Ready to press the red button? 🚨${NC}"
-    echo -e "${BOLD}${WHITE}💡 Review the configuration summary:${NC} ${CYAN}outputs/envoy/configuration-summary.md${NC}"
+    echo -e "${BOLD}${WHITE}💡 Review the configuration summary:${NC} ${CYAN}outputs/$PROXY_TYPE/configuration-summary.md${NC}"
     read -p "   Continue with deployment? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Deployment stopped after Terraform. Review configuration-summary.md and run ./deploy.sh again when ready."
+        log_info "Deployment stopped after Terraform. Review outputs/$PROXY_TYPE/configuration-summary.md and run ./deploy.sh again when ready."
         exit 0
     fi
     
-    if [ "$PROXY_TYPE" = "envoy" ]; then
-        start_proxy
-        create_origin_pools
-        apply_manifests
-        show_status
-    else
-        log_info "Proxy type '$PROXY_TYPE' not yet implemented"
-    fi
+    start_proxy
+    create_origin_pools
+    apply_manifests
+    show_status
 }
 
 # Run main function
 main "$@"
-

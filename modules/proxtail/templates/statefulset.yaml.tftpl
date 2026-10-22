@@ -1,0 +1,113 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tailscale-egress
+  labels:
+    app: tailscale-egress
+    proxy: proxtail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tailscale-egress
+  serviceName: tailscale-egress
+  template:
+    metadata:
+      labels:
+        app: tailscale-egress
+        proxy: proxtail
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
+        prometheus.io/path: "/metrics"
+    spec:
+%{ if anytrue([for tailnet in tailnets : tailnet.use_k8s_secret]) ~}
+      serviceAccountName: tailscale-egress
+%{ endif ~}
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxtail
+          image: ${container_registry == "docker.io" ? "ghcr.io" : container_registry}/fadlytabrani/proxtail:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: PROXTAIL_CONFIG
+              value: /etc/proxtail/config.yaml
+            - name: PROXTAIL_HEALTH_PORT
+              value: "9000"
+            - name: TS_STATE_DIR
+              value: /var/lib/tsnet
+%{ for tailnet in tailnets ~}
+            - name: TS_AUTHKEY_${upper(replace(replace(tailnet.tailnet_name, "-", "_"), ".", "_"))}
+%{ if tailnet.use_k8s_secret ~}
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth-${tailnet.tailnet_name}
+                  key: TS_AUTHKEY
+%{ else ~}
+              value: '${tailnet.tailnet_key}'
+%{ endif ~}
+%{ endfor ~}
+          ports:
+%{ for tailnet_index, tailnet in tailnets ~}
+%{ for service_index, service in tailnet.services ~}
+            - name: p${10000 + (tailnet_index * 1000) + service_index}-${lower(service.protocol)}
+              containerPort: ${10000 + (tailnet_index * 1000) + service_index}
+              protocol: ${upper(service.protocol)}
+%{ endfor ~}
+%{ endfor ~}
+            - name: health
+              containerPort: 9000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/proxtail
+              readOnly: true
+            - name: tsnet-state
+              mountPath: /var/lib/tsnet
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: tailscale-egress-proxtail
+        - name: tsnet-state
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

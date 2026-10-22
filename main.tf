@@ -11,112 +11,72 @@ terraform {
   }
 }
 
-# Generate Service for multi-tailnet egress - Envoy
-resource "local_file" "envoy_service" {
-  content = templatefile("./envoy/k8s/service.yaml.tftpl", {
-    tailnets = var.tailnets
-  })
-  filename = "${path.module}/outputs/envoy/k8s/04-service.yaml"
+locals {
+  # Create a flat list of all services across all tailnets with calculated port mappings
+  all_services = flatten([
+    for tailnet_index, tailnet in var.tailnets : [
+      for service_index, service in tailnet.services : {
+        global_index     = length(flatten([for t in slice(var.tailnets, 0, tailnet_index) : t.services])) + service_index
+        tailnet_index    = tailnet_index
+        service_index    = service_index
+        tailnet_name     = tailnet.tailnet_name
+        endpoint         = service.endpoint
+        f5xc_origin_pool = service.f5xc_origin_pool
+        port             = service.port
+        protocol         = service.protocol
+        exposed_port     = 10000 + (tailnet_index * 1000) + service_index
+        service_endpoint = "tailscale-egress.${var.k8s_namespace}:${10000 + (tailnet_index * 1000) + service_index}"
+      }
+    ]
+  ])
+
+  pool_name_map = {
+    for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"...
+  }
 }
 
-# Generate RBAC resources only if any tailnet uses k8s secrets - Envoy
-resource "local_file" "envoy_serviceaccount" {
-  count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/k8s/serviceaccount.yaml.tftpl", {
-    tailnets = var.tailnets
-  })
-  filename = "${path.module}/outputs/envoy/k8s/01-serviceaccount.yaml"
-}
-
-resource "local_file" "envoy_role" {
-  count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/k8s/role.yaml.tftpl", {
-    tailnets = var.tailnets
-  })
-  filename = "${path.module}/outputs/envoy/k8s/02-role.yaml"
-}
-
-resource "local_file" "envoy_rolebinding" {
-  count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/k8s/rolebinding.yaml.tftpl", {
-    tailnets = var.tailnets
-  })
-  filename = "${path.module}/outputs/envoy/k8s/03-rolebinding.yaml"
-}
-
-
-
-# Generate secrets for tailnets that use k8s secrets - Envoy
-resource "local_file" "envoy_secrets" {
-  count = anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret]) ? 1 : 0
-  content = templatefile("./envoy/k8s/secrets.yaml.tftpl", {
-    tailnets = var.tailnets
-  })
-  filename = "${path.module}/outputs/envoy/k8s/00-secrets.yaml"
-}
-
-
-
-# Generate ConfigMap - Envoy
-resource "local_file" "envoy_configmap" {
-  content = templatefile("./envoy/k8s/configmap.yaml.tftpl", {
-    tailnets = var.tailnets
-  })
-  filename = "${path.module}/outputs/envoy/k8s/05-configmap.yaml"
-}
-
-
-
-# Generate StatefulSet - Envoy
-resource "local_file" "envoy_statefulset" {
-  content = templatefile(
-    anytrue([for tailnet in var.tailnets : tailnet.use_k8s_secret])
-    ? "./envoy/k8s/statefulset-secrets.yaml.tftpl"
-    : "./envoy/k8s/statefulset.yaml.tftpl",
-    {
-      tailnets           = var.tailnets
-      k8s_namespace      = var.k8s_namespace
-      container_registry = var.container_registry
-    }
-  )
-  filename = "${path.module}/outputs/envoy/k8s/06-statefulset.yaml"
-}
-
-
-
-# Generate unique suffixes for origin pool names to avoid conflicts
+# Generate unique suffixes for origin pool names to avoid naming conflicts
 resource "random_id" "origin_pool_suffix" {
-  count       = length(flatten([for tailnet in var.tailnets : tailnet.services]))
+  count       = length(local.all_services)
   byte_length = 4
   keepers = {
-    # Regenerate suffixes when tailnet configuration changes
     tailnet_config = jsonencode(var.tailnets)
   }
 }
 
-# Generate origin pool JSON configurations for F5 XC API
-resource "local_file" "origin_pool_configs" {
-  count = length(flatten([for tailnet in var.tailnets : tailnet.services]))
-  content = templatefile("${path.module}/envoy/f5xc/origin_pool.json.tftpl", {
-    origin_pool_name = "${local.all_services[count.index].f5xc_origin_pool}-${random_id.origin_pool_suffix[count.index].hex}"
-    namespace        = var.k8s_namespace
-    service_endpoint = local.all_services[count.index].service_endpoint
-    exposed_port     = local.all_services[count.index].exposed_port
-    protocol         = local.all_services[count.index].protocol
-  })
-  filename = "${path.module}/outputs/envoy/f5xc/${local.all_services[count.index].f5xc_origin_pool}-${random_id.origin_pool_suffix[count.index].hex}.json"
+# Generate F5 XC Origin Pool JSON configurations
+module "f5xc" {
+  source               = "./modules/f5xc"
+  output_dir           = "${path.module}/outputs/${var.proxy_type}/f5xc"
+  k8s_namespace        = var.k8s_namespace
+  services             = local.all_services
+  origin_pool_suffixes = random_id.origin_pool_suffix
 }
 
-# Generate configuration summary documentation - Envoy
-resource "local_file" "envoy_configuration_summary_doc" {
-  content = templatefile("./envoy/configuration-summary.md.tftpl", {
-    tailnets      = var.tailnets
-    k8s_namespace = var.k8s_namespace
-    pool_name_map = {
-      for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
-    }
-  })
-  filename = "${path.module}/outputs/envoy/configuration-summary.md"
+# Generate Envoy proxy manifests
+module "envoy" {
+  count              = var.proxy_type == "envoy" ? 1 : 0
+  source             = "./modules/envoy"
+  output_dir         = "${path.module}/outputs/envoy/k8s"
+  summary_output_dir = "${path.module}/outputs/envoy"
+  k8s_namespace      = var.k8s_namespace
+  container_registry = var.container_registry
+  tailnets           = var.tailnets
+  pool_name_map = {
+    for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
+  }
 }
 
-
+# Generate Proxtail proxy manifests
+module "proxtail" {
+  count              = var.proxy_type == "proxtail" ? 1 : 0
+  source             = "./modules/proxtail"
+  output_dir         = "${path.module}/outputs/proxtail/k8s"
+  summary_output_dir = "${path.module}/outputs/proxtail"
+  k8s_namespace      = var.k8s_namespace
+  container_registry = var.container_registry
+  tailnets           = var.tailnets
+  pool_name_map = {
+    for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
+  }
+}

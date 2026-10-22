@@ -1,3 +1,14 @@
+variable "proxy_type" {
+  description = "Proxy implementation to generate manifests for (envoy, proxtail)"
+  type        = string
+  default     = "proxtail"
+
+  validation {
+    condition     = contains(["envoy", "proxtail"], var.proxy_type)
+    error_message = "proxy_type must be either 'envoy' or 'proxtail'."
+  }
+}
+
 variable "k8s_namespace" {
   description = "Kubernetes namespace where resources will be deployed"
   type        = string
@@ -5,7 +16,7 @@ variable "k8s_namespace" {
 }
 
 variable "container_registry" {
-  description = "Alternative to container registry to use for downloadingn images"
+  description = "Container registry to use for downloading images"
   type        = string
   default     = "docker.io"
 }
@@ -20,7 +31,7 @@ variable "tailnets" {
     # Authentication key for the tailnet (can be OAuth key or Auth key).
     tailnet_key = string
 
-    # Advertise tags for the proxynode. Tags must already exist in the tailnet. Eg: "tag:server,tag:development"
+    # Advertise tags for the proxy node. Tags must already exist in the tailnet. Eg: "tag:server,tag:development"
     tailnet_advertise_tags = optional(string)
 
     # Optional flag to use Kubernetes secret for the tailnet keys. This will generate associated manifests, such as secrets roles and rolebindings.
@@ -63,5 +74,16 @@ variable "tailnets" {
       ])
     ])
     error_message = "Service protocol must be either 'tcp' or 'udp'."
+  }
+
+  validation {
+    condition = var.proxy_type != "envoy" || alltrue([
+      for tailnet in var.tailnets :
+      alltrue([
+        for service in tailnet.services :
+        service.protocol == "tcp"
+      ])
+    ])
+    error_message = "The Envoy proxy implementation only supports 'tcp' protocol. Use 'proxtail' for UDP support."
   }
 }

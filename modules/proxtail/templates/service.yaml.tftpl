@@ -5,6 +5,7 @@ metadata:
   name: tailscale-egress
   labels:
     app: tailscale-egress
+    proxy: proxtail
 spec:
   clusterIP: None
   selector:
@@ -12,9 +13,13 @@ spec:
   ports:
 %{ for tailnet_index, tailnet in tailnets ~}
 %{ for service_index, service in tailnet.services ~}
-    - name: ${tailnet.tailnet_name}-${service.protocol}-${service_index}
+    - name: p${10000 + (tailnet_index * 1000) + service_index}-${lower(service.protocol)}
       protocol: ${upper(service.protocol)}
       port: ${10000 + (tailnet_index * 1000) + service_index}
       targetPort: ${10000 + (tailnet_index * 1000) + service_index}
 %{ endfor ~}
 %{ endfor ~}
+    - name: health
+      protocol: TCP
+      port: 9000
+      targetPort: 9000

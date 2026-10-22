@@ -5,6 +5,7 @@ metadata:
   name: tailscale-egress
   labels:
     app: tailscale-egress
+    proxy: envoy
 spec:
   replicas: 1
   selector:
@@ -15,7 +16,12 @@ spec:
     metadata:
       labels:
         app: tailscale-egress
+        proxy: envoy
     spec:
+%{ if anytrue([for tailnet in tailnets : tailnet.use_k8s_secret]) ~}
+      serviceAccountName: tailscale-egress
+%{ endif ~}
+      terminationGracePeriodSeconds: 30
       containers:
         - name: envoy
           image: ${container_registry}/envoyproxy/envoy-distroless:v1.34-latest
@@ -23,6 +29,14 @@ spec:
             - name: envoy-config
               mountPath: /etc/envoy
               readOnly: true
+          ports:
+%{ for tailnet_index, tailnet in tailnets ~}
+%{ for service_index, service in tailnet.services ~}
+            - name: p${10000 + (tailnet_index * 1000) + service_index}-${lower(service.protocol)}
+              containerPort: ${10000 + (tailnet_index * 1000) + service_index}
+              protocol: ${upper(service.protocol)}
+%{ endfor ~}
+%{ endfor ~}
 %{ for index, tailnet in tailnets ~}
         - name: tailscale-${tailnet.tailnet_name}
           image: ${container_registry}/tailscale/tailscale:stable
@@ -45,12 +59,20 @@ spec:
               value: 'localhost:${10550 + index}'
             - name: TS_KUBE_SECRET
               value: ''
+%{ if tailnet.use_k8s_secret ~}
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth-${tailnet.tailnet_name}
+                  key: TS_AUTHKEY
+%{ else ~}
             - name: TS_AUTHKEY
               value: '${tailnet.tailnet_key}'
+%{ endif ~}
 %{ endfor ~}
       volumes:
         - name: envoy-config
-          configMap: 
+          configMap:
             name: tailscale-egress-envoy
 %{ for tailnet in tailnets ~}
         - name: var-run-${tailnet.tailnet_name}

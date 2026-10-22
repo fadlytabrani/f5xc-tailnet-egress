@@ -1,28 +1,29 @@
+proxy_type    = "proxtail" # "proxtail" or "envoy"
 k8s_namespace = "devtest"
 
 tailnets = [
   {
-    tailnet_name = "tailxxxxxx"
-    tailnet_key = "tskey-auth-xxxx"
+    tailnet_name   = "tailxxxxxx"
+    tailnet_key    = "tskey-auth-xxxx"
     use_k8s_secret = true
     services = [
       {
-        endpoint = "tsnode.tailxxxxxx.ts.net"
-        protocol = "tcp"
-        port = 3000
+        endpoint         = "tsnode.tailxxxxxx.ts.net"
+        protocol         = "tcp"
+        port             = 3000
         f5xc_origin_pool = "app1-example-com-ts"
       }
     ]
   },
   {
-    tailnet_name = "tailyyyyyy"
-    tailnet_key = "tskey-auth-yyyy"
+    tailnet_name   = "tailyyyyyy"
+    tailnet_key    = "tskey-auth-yyyy"
     use_k8s_secret = true
     services = [
       {
-        endpoint = "tsnode.tailyyyyyy.ts.net"
-        protocol = "tcp"
-        port = 3000
+        endpoint         = "tsnode.tailyyyyyy.ts.net"
+        protocol         = "tcp"
+        port             = 3000
         f5xc_origin_pool = "app2-example-com-ts"
       }
     ]
