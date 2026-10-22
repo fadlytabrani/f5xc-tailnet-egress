@@ -53,9 +53,6 @@ flowchart LR
         POD -- "WireGuard Mesh" --> T1
     end
 ```
-
-![Architecture Diagram](docs/images/architecture.svg)
-
 ---
 
 ## ⚡ Pluggable Proxy Engines
