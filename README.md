@@ -228,6 +228,14 @@ curl http://localhost:10000
 
 ---
 
+## Acknowledgements
+
+This project was built and optimized with the assistance of LLMs:
+- **Gemini 4 Argon**
+- **Gemini 3.8 Flash**
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to open an issue or submit a pull request.
