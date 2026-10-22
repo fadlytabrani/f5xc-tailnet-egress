@@ -157,9 +157,7 @@ The script will:
 
 The egress service uses a deterministic port allocation formula that avoids collisions across tailnets:
 
-```math
-\(\text{Exposed Port} = 10000 + (\text{tailnet\_index} \times 1000) + \text{service\_index}\)
-```
+Exposed Port = 10000 + (tailnet_index * 1000) + service_index
 
 | Tailnet Index | Service Index | Protocol | Exposed Port | Target Backend Example |
 | :---: | :---: | :---: | :---: | :--- |
