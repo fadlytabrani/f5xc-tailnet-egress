@@ -143,6 +143,10 @@ Run the automated deployment script:
 # Or select a proxy explicitly
 ./deploy.sh --proxy proxtail
 ./deploy.sh --proxy envoy
+
+# Run non-interactively (CI/CD) or tear down deployed resources
+./deploy.sh --yes
+./deploy.sh --destroy
 ```
 
 The script will:
@@ -176,16 +180,22 @@ Exposed Port = 10000 + (tailnet_index * 1000) + service_index
 | `proxy_type` | `string` | `"proxtail"` | Proxy engine to deploy: `"proxtail"` or `"envoy"`. |
 | `k8s_namespace` | `string` | `"default"` | Target Kubernetes namespace for manifests and origin pools. |
 | `container_registry` | `string` | `"docker.io"` | Container registry mirror for pulling proxy images. |
+| `replicas` | `number` | `1` | Number of `StatefulSet` pod replicas for horizontal scaling. |
+| `f5xc_virtual_site` | `string` | `"ves-io-all-res"` | F5 XC virtual site name in the `shared` namespace for Origin Pool discovery. |
+| `enable_upstream_probe` | `bool` | `false` | Enable active upstream reachability probing and listener suspension in `proxtail`. |
 | `tailnets` | `list(object)` | *(required)* | List of tailnet configurations and backend services. |
-| `tailnets[].tailnet_name` | `string` | *(required)* | Unique identifier for the tailnet. |
+| `tailnets[].tailnet_name` | `string` | *(required)* | Unique identifier for the tailnet (`profile` in `proxtail`). |
 | `tailnets[].tailnet_key` | `string` | *(required)* | Reusable Tailscale auth key (`tskey-auth-...`) or OAuth secret (`tskey-client-...`). |
 | `tailnets[].use_k8s_secret`| `bool` | `false` | When `true`, stores credentials in Kubernetes `Secret` objects. |
 | `tailnets[].tailnet_advertise_tags` | `string` | `null` | Optional comma-separated ACL tags (e.g. `"tag:proxy,tag:prod"`). |
+| `tailnets[].control_url` | `string` | `null` | Optional custom coordination server URL (e.g. Headscale) for `proxtail`. |
+| `tailnets[].auto_proxy_vips` | `bool` | `false` | Automatically discover and proxy Tailscale VIP services onto `30000-30999` in `proxtail`. |
 | `tailnets[].services[].endpoint` | `string` | *(required)* | Target backend hostname (MagicDNS) or Tailscale IP. |
-| `tailnets[].services[].protocol` | `string` | `"tcp"` | Service protocol: `"tcp"` or `"udp"`. |
+| `tailnets[].services[].protocol` | `string` | *(required)* | Service protocol: `"tcp"` or `"udp"`. |
 | `tailnets[].services[].port` | `number` | *(required)* | Destination port on the target tailnet backend. |
-| `tailnets[].services[].f5xc_origin_pool` | `string` | *(required)* | F5 XC Origin Pool name. |
-| `tailnets[].services[].connection_timeout` | `number` | `5` | Upstream connection timeout in seconds. |
+| `tailnets[].services[].f5xc_origin_pool` | `string` | *(required)* | Unique F5 XC Origin Pool name. |
+| `tailnets[].services[].connection_timeout` | `number` | `30` (`proxtail`) / `5` (`envoy`) | Upstream connection/idle timeout in seconds. |
+| `tailnets[].services[].probe` | `bool` | `null` | Optional per-port override for active upstream reachability probing in `proxtail`. |
 
 ---
 

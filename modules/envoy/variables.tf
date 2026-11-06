@@ -18,6 +18,12 @@ variable "container_registry" {
   type        = string
 }
 
+variable "replicas" {
+  description = "Number of StatefulSet pod replicas"
+  type        = number
+  default     = 1
+}
+
 variable "tailnets" {
   description = "List of tailnets and their services"
   type        = any

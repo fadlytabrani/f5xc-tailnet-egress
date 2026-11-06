@@ -7,6 +7,8 @@ set -e
 # Default configuration
 PROXY_TYPE=${PROXY_TYPE:-"proxtail"}
 VERBOSE=false
+AUTO_APPROVE=false
+DESTROY=false
 NAMESPACE=""
 PROXY_PID=""
 
@@ -21,6 +23,14 @@ while [[ $# -gt 0 ]]; do
             PROXY_TYPE="${1#*=}"
             shift
             ;;
+        -y|--yes)
+            AUTO_APPROVE=true
+            shift
+            ;;
+        -d|--destroy)
+            DESTROY=true
+            shift
+            ;;
         --verbose)
             VERBOSE=true
             shift
@@ -30,6 +40,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  -p, --proxy <type>   Proxy implementation to deploy: 'proxtail' (default) or 'envoy'"
+            echo "  -y, --yes            Skip interactive confirmation prompt"
+            echo "  -d, --destroy        Destroy deployed Kubernetes resources, F5 XC Origin Pools, and Terraform state"
             echo "  --verbose            Show verbose Terraform output"
             echo "  -h, --help           Show this help message"
             echo ""
@@ -37,6 +49,8 @@ while [[ $# -gt 0 ]]; do
             echo "  $0                      # Deploy with default proxy (proxtail)"
             echo "  $0 --proxy proxtail     # Explicitly deploy proxtail"
             echo "  $0 --proxy envoy        # Deploy envoy proxy solution"
+            echo "  $0 --yes                # Unattended deployment"
+            echo "  $0 --destroy            # Tear down deployed resources and origin pools"
             echo "  $0 --verbose            # Run with verbose output"
             exit 0
             ;;
@@ -226,14 +240,15 @@ start_proxy() {
     show_separator
 }
 
-# Create origin pools
+# Create or update origin pools idempotently
 create_origin_pools() {
     log_header "F5 XC OBJECT CREATION"
     
     local pools_dir="outputs/$PROXY_TYPE/f5xc"
     local created=0
+    local updated=0
     
-    log_progress "Creating origin pools from $pools_dir..."
+    log_progress "Provisioning origin pools from $pools_dir..."
     
     shopt -s nullglob
     local json_files=("$pools_dir"/*.json)
@@ -250,7 +265,7 @@ create_origin_pools() {
         if [ -f "$json_file" ]; then
             local unique_name=$(basename "$json_file" .json)
             
-            log_info "Creating: ${BOLD}$unique_name${NC}"
+            log_info "Provisioning: ${BOLD}$unique_name${NC}"
             
             local response=$(curl -s -w "\n%{http_code}" -X POST \
                 -H "Content-Type: application/json" \
@@ -262,6 +277,22 @@ create_origin_pools() {
             if [ "$status" = "200" ] || [ "$status" = "201" ]; then
                 log_success "Created: $unique_name"
                 ((created++))
+            elif [ "$status" = "409" ]; then
+                log_warning "Origin pool '$unique_name' already exists (HTTP 409); updating in-place via PUT..."
+                local put_response=$(curl -s -w "\n%{http_code}" -X PUT \
+                    -H "Content-Type: application/json" \
+                    -d "$(cat "$json_file")" \
+                    "http://localhost:8001/api/config/namespaces/$NAMESPACE/origin_pools/$unique_name" \
+                    2>/dev/null)
+                local put_status=$(echo "$put_response" | tail -n1)
+                if [ "$put_status" = "200" ] || [ "$put_status" = "201" ]; then
+                    log_success "Updated: $unique_name"
+                    ((updated++))
+                else
+                    log_error "Failed to update: $unique_name (HTTP: $put_status)"
+                    show_troubleshooting_tips
+                    exit 1
+                fi
             else
                 log_error "Failed: $unique_name (HTTP: $status)"
                 log_error "💡 Investigate error response codes at: https://docs.cloud.f5.com/docs-v2/api/views-origin-pool#operation/ves.io.schema.views.origin_pool.API.Create"
@@ -272,7 +303,7 @@ create_origin_pools() {
         fi
     done
     
-    log_success "All origin pools created successfully ($created created)"
+    log_success "All origin pools provisioned ($created created, $updated updated)"
     show_separator
 }
 
@@ -305,6 +336,79 @@ apply_manifests() {
     show_separator
 }
 
+# Destroy deployed resources and origin pools
+destroy_deployment() {
+    log_header "TEARDOWN & CLEANUP ($PROXY_TYPE)"
+
+    if [ "$AUTO_APPROVE" != true ]; then
+        echo -e "${BOLD}${YELLOW}⚠️  This will delete Kubernetes resources, F5 XC Origin Pools, and local Terraform state.${NC}"
+        read -p "   Continue with teardown? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Teardown cancelled."
+            exit 0
+        fi
+    fi
+
+    start_proxy
+
+    local manifests_dir="outputs/$PROXY_TYPE/k8s"
+    shopt -s nullglob
+    local manifest_files=("$manifests_dir"/*.yaml)
+    shopt -u nullglob
+
+    if [ ${#manifest_files[@]} -gt 0 ]; then
+        log_progress "Deleting Kubernetes manifests in $NAMESPACE..."
+        for (( idx=${#manifest_files[@]}-1 ; idx>=0 ; idx-- )) ; do
+            local manifest="${manifest_files[idx]}"
+            if [ -f "$manifest" ]; then
+                local basename=$(basename "$manifest")
+                log_info "Deleting: ${BOLD}$basename${NC}"
+                kubectl delete -f "$manifest" -n "$NAMESPACE" --ignore-not-found
+            fi
+        done
+        log_success "Kubernetes manifests deleted"
+    else
+        log_warning "No local Kubernetes manifests found in $manifests_dir; skipping kubectl delete"
+    fi
+
+    local pools_dir="outputs/$PROXY_TYPE/f5xc"
+    shopt -s nullglob
+    local json_files=("$pools_dir"/*.json)
+    shopt -u nullglob
+
+    if [ ${#json_files[@]} -gt 0 ]; then
+        log_progress "Deleting F5 XC origin pools..."
+        for json_file in "${json_files[@]}"; do
+            if [ -f "$json_file" ]; then
+                local unique_name=$(basename "$json_file" .json)
+                log_info "Deleting origin pool: ${BOLD}$unique_name${NC}"
+                local del_response=$(curl -s -w "\n%{http_code}" -X DELETE \
+                    "http://localhost:8001/api/config/namespaces/$NAMESPACE/origin_pools/$unique_name" \
+                    2>/dev/null)
+                local del_status=$(echo "$del_response" | tail -n1)
+                if [ "$del_status" = "200" ] || [ "$del_status" = "204" ] || [ "$del_status" = "404" ]; then
+                    log_success "Deleted (or already absent): $unique_name"
+                else
+                    log_warning "Could not delete origin pool $unique_name (HTTP: $del_status)"
+                fi
+            fi
+        done
+    else
+        log_warning "No local F5 XC origin pool files found in $pools_dir"
+    fi
+
+    log_step "Running terraform destroy..."
+    if [ "$VERBOSE" = true ]; then
+        terraform destroy --auto-approve -var="proxy_type=$PROXY_TYPE"
+    else
+        terraform destroy --auto-approve -var="proxy_type=$PROXY_TYPE" -compact-warnings > /dev/null 2>&1
+    fi
+    rm -rf "outputs/$PROXY_TYPE"
+    log_success "Teardown complete"
+    show_separator
+}
+
 # Show troubleshooting tips
 show_troubleshooting_tips() {
     log_header "TROUBLESHOOTING TIPS"
@@ -312,8 +416,8 @@ show_troubleshooting_tips() {
     echo -e "${BOLD}${YELLOW}🔧 Common Issues & Solutions:${NC}\n"
     
     echo -e "${BOLD}${CYAN}F5 XC OBJECT CREATION:${NC}"
-    echo -e "  • Most errors occur when trying to create objects that already exist"
-    echo -e "  • Solution: Run ${BOLD}terraform destroy${NC} to clean up existing resources"
+    echo -e "  • Check if the origin pool is referenced by an active HTTP/TCP Load Balancer"
+    echo -e "  • Solution: Run ${BOLD}./deploy.sh --destroy --proxy $PROXY_TYPE${NC} to clean up resources"
     echo -e "  • Then retry: ${BOLD}./deploy.sh --proxy $PROXY_TYPE${NC}\n"
 
     echo -e "${BOLD}${CYAN}KUBERNETES CONNECTION:${NC}"
@@ -367,15 +471,23 @@ main() {
     trap cleanup EXIT
     
     check_prerequisites
+
+    if [ "$DESTROY" = true ]; then
+        destroy_deployment
+        exit 0
+    fi
+
     run_terraform
     
-    echo -e "\n${BOLD}${YELLOW}🤔 Ready to press the red button? 🚨${NC}"
-    echo -e "${BOLD}${WHITE}💡 Review the configuration summary:${NC} ${CYAN}outputs/$PROXY_TYPE/configuration-summary.md${NC}"
-    read -p "   Continue with deployment? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Deployment stopped after Terraform. Review outputs/$PROXY_TYPE/configuration-summary.md and run ./deploy.sh again when ready."
-        exit 0
+    if [ "$AUTO_APPROVE" != true ]; then
+        echo -e "\n${BOLD}${YELLOW}🤔 Ready to press the red button? 🚨${NC}"
+        echo -e "${BOLD}${WHITE}💡 Review the configuration summary:${NC} ${CYAN}outputs/$PROXY_TYPE/configuration-summary.md${NC}"
+        read -p "   Continue with deployment? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Deployment stopped after Terraform. Review outputs/$PROXY_TYPE/configuration-summary.md and run ./deploy.sh again when ready."
+            exit 0
+        fi
     fi
     
     start_proxy

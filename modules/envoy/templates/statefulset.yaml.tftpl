@@ -7,7 +7,7 @@ metadata:
     app: tailscale-egress
     proxy: envoy
 spec:
-  replicas: 1
+  replicas: ${replicas}
   selector:
     matchLabels:
       app: tailscale-egress

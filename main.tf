@@ -23,7 +23,7 @@ locals {
         endpoint         = service.endpoint
         f5xc_origin_pool = service.f5xc_origin_pool
         port             = service.port
-        protocol         = service.protocol
+        protocol         = lower(service.protocol)
         exposed_port     = 10000 + (tailnet_index * 1000) + service_index
         service_endpoint = "tailscale-egress.${var.k8s_namespace}:${10000 + (tailnet_index * 1000) + service_index}"
       }
@@ -31,7 +31,7 @@ locals {
   ])
 
   pool_name_map = {
-    for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"...
+    for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
   }
 }
 
@@ -49,6 +49,7 @@ module "f5xc" {
   source               = "./modules/f5xc"
   output_dir           = "${path.module}/outputs/${var.proxy_type}/f5xc"
   k8s_namespace        = var.k8s_namespace
+  f5xc_virtual_site    = var.f5xc_virtual_site
   services             = local.all_services
   origin_pool_suffixes = random_id.origin_pool_suffix
 }
@@ -61,22 +62,21 @@ module "envoy" {
   summary_output_dir = "${path.module}/outputs/envoy"
   k8s_namespace      = var.k8s_namespace
   container_registry = var.container_registry
+  replicas           = var.replicas
   tailnets           = var.tailnets
-  pool_name_map = {
-    for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
-  }
+  pool_name_map      = local.pool_name_map
 }
 
 # Generate Proxtail proxy manifests
 module "proxtail" {
-  count              = var.proxy_type == "proxtail" ? 1 : 0
-  source             = "./modules/proxtail"
-  output_dir         = "${path.module}/outputs/proxtail/k8s"
-  summary_output_dir = "${path.module}/outputs/proxtail"
-  k8s_namespace      = var.k8s_namespace
-  container_registry = var.container_registry
-  tailnets           = var.tailnets
-  pool_name_map = {
-    for service in local.all_services : service.f5xc_origin_pool => "${service.f5xc_origin_pool}-${random_id.origin_pool_suffix[service.global_index].hex}"
-  }
+  count                 = var.proxy_type == "proxtail" ? 1 : 0
+  source                = "./modules/proxtail"
+  output_dir            = "${path.module}/outputs/proxtail/k8s"
+  summary_output_dir    = "${path.module}/outputs/proxtail"
+  k8s_namespace         = var.k8s_namespace
+  container_registry    = var.container_registry
+  replicas              = var.replicas
+  enable_upstream_probe = var.enable_upstream_probe
+  tailnets              = var.tailnets
+  pool_name_map         = local.pool_name_map
 }

@@ -17,9 +17,9 @@ output "service_ports" {
         service_index    = service_index
         endpoint         = service.endpoint
         port             = service.port
-        protocol         = service.protocol
+        protocol         = lower(service.protocol)
         exposed_port     = 10000 + (tailnet_index * 1000) + service_index
-        proxy_port       = 10550 + tailnet_index
+        proxy_port       = var.proxy_type == "envoy" ? 10550 + tailnet_index : null
         f5xc_origin_pool = service.f5xc_origin_pool
       }
     ]

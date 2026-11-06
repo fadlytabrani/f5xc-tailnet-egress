@@ -8,6 +8,12 @@ variable "k8s_namespace" {
   type        = string
 }
 
+variable "f5xc_virtual_site" {
+  description = "F5 XC virtual site name in the shared namespace"
+  type        = string
+  default     = "ves-io-all-res"
+}
+
 variable "services" {
   description = "Flattened list of all services across all tailnets"
   type = list(object({

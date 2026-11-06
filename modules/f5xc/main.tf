@@ -3,6 +3,7 @@ resource "local_file" "origin_pool_configs" {
   content = templatefile("${path.module}/templates/origin_pool.json.tftpl", {
     origin_pool_name = "${var.services[count.index].f5xc_origin_pool}-${var.origin_pool_suffixes[count.index].hex}"
     namespace        = var.k8s_namespace
+    virtual_site     = var.f5xc_virtual_site
     service_endpoint = var.services[count.index].service_endpoint
     exposed_port     = var.services[count.index].exposed_port
     protocol         = var.services[count.index].protocol

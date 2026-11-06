@@ -39,6 +39,8 @@ F5 XC → Kubernetes Service → Proxtail (Single Container StatefulSet) → Tai
 - **Zero-Downtime Hot Reload & Fault Isolation**:
   - Automatically reloads Kubernetes `ConfigMap` updates in `< 100ms` without dropping active connections
   - Per-tailnet fault isolation ensures an invalid or expired key on one tailnet never disrupts healthy tailnets
+- **Active Upstream Probing (`enable_upstream_probe`)**:
+  - When enabled (`enable_upstream_probe = true` or per-service `probe = true`), `proxtail` actively monitors Tailscale peer reachability and suspends local TCP (`ECONNREFUSED`) or UDP (`ICMP Port Unreachable`) listeners when a remote backend goes offline or is blocked by ACLs, automatically re-binding upon recovery.
 
 ## Kubernetes Architecture
 
@@ -63,14 +65,16 @@ tailnets:
   - profile: "tailnet0"
     hostname: "proxtail-tailnet0-${HOSTNAME}"
     ephemeral: true
+    auto_proxy_vips: false
     ports:
       - port: 10000
         destination: "app.tailnet0.ts.net:80"
         protocol: "tcp"
-        timeout: 10
+        timeout: 30
   - profile: "tailnet1"
     hostname: "proxtail-tailnet1-${HOSTNAME}"
     ephemeral: true
+    auto_proxy_vips: false
     ports:
       - port: 11000
         destination: "dns.tailnet1.ts.net:53"

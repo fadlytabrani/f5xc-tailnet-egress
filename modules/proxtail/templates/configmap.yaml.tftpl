@@ -10,11 +10,19 @@ data:
   config.yaml: |
     proxy:
       api_port: 9000
+%{ if enable_upstream_probe ~}
+      probe:
+        enabled: true
+%{ endif ~}
     tailnets:
 %{ for tailnet_index, tailnet in tailnets ~}
       - profile: "${tailnet.tailnet_name}"
         hostname: "proxtail-${tailnet.tailnet_name}-$${HOSTNAME}"
         ephemeral: true
+        auto_proxy_vips: ${coalesce(tailnet.auto_proxy_vips, false)}
+%{ if tailnet.control_url != null && tailnet.control_url != "" ~}
+        control_url: "${tailnet.control_url}"
+%{ endif ~}
 %{ if tailnet.tailnet_advertise_tags != null && tailnet.tailnet_advertise_tags != "" ~}
         tags:
 %{ for tag in split(",", tailnet.tailnet_advertise_tags) ~}
@@ -27,5 +35,8 @@ data:
             destination: "${service.endpoint}:${service.port}"
             protocol: "${lower(service.protocol)}"
             timeout: ${coalesce(service.connection_timeout, 30)}
+%{ if service.probe != null ~}
+            probe: ${service.probe}
+%{ endif ~}
 %{ endfor ~}
 %{ endfor ~}

@@ -56,6 +56,7 @@ resource "local_file" "statefulset" {
     tailnets           = var.tailnets
     k8s_namespace      = var.k8s_namespace
     container_registry = var.container_registry
+    replicas           = var.replicas
   })
   filename = "${var.output_dir}/06-statefulset.yaml"
 }
@@ -65,6 +66,7 @@ resource "local_file" "configuration_summary" {
   content = templatefile("${path.module}/templates/configuration-summary.md.tftpl", {
     tailnets      = var.tailnets
     k8s_namespace = var.k8s_namespace
+    replicas      = var.replicas
     pool_name_map = var.pool_name_map
   })
   filename = "${var.summary_output_dir}/configuration-summary.md"

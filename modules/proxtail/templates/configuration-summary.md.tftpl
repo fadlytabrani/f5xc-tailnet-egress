@@ -3,7 +3,7 @@
 ## Overview
 - **Proxy Type**: Proxtail (High-performance userspace `tsnet` Layer 4 reverse proxy)
 - **Kubernetes Namespace**: ${k8s_namespace}
-- **Workload Type**: StatefulSet (`tailscale-egress`)
+- **Workload Type**: StatefulSet (`tailscale-egress`, Replicas: ${replicas})
 - **Key Features**:
   - Single-container architecture (no sidecar container chaining)
   - Native **TCP and UDP** multi-tailnet proxying

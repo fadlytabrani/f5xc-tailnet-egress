@@ -18,6 +18,18 @@ variable "container_registry" {
   type        = string
 }
 
+variable "replicas" {
+  description = "Number of StatefulSet pod replicas"
+  type        = number
+  default     = 1
+}
+
+variable "enable_upstream_probe" {
+  description = "Enable active upstream TCP/UDP reachability probing in proxtail"
+  type        = bool
+  default     = false
+}
+
 variable "tailnets" {
   description = "List of tailnets and their services"
   type        = any
