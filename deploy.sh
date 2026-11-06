@@ -346,7 +346,7 @@ show_status() {
     echo -e "  ${CYAN}📊${NC} Check pod status: ${BOLD}kubectl get pods -l app=tailscale-egress -n $NAMESPACE${NC}"
     if [ "$PROXY_TYPE" = "proxtail" ]; then
         echo -e "  ${CYAN}📋${NC} View logs: ${BOLD}kubectl logs -l app=tailscale-egress -c proxtail -n $NAMESPACE${NC}"
-        echo -e "  ${CYAN}🏥${NC} Check health: ${BOLD}kubectl exec -it statefulset/tailscale-egress -n $NAMESPACE -- wget -qO- http://localhost:9000/readyz${NC}"
+        echo -e "  ${CYAN}🏥${NC} Check health: ${BOLD}kubectl exec -it statefulset/tailscale-egress -n $NAMESPACE -- wget -qO- http://localhost:9000/healthz${NC}"
     else
         echo -e "  ${CYAN}📋${NC} View logs: ${BOLD}kubectl logs -l app=tailscale-egress -c envoy -n $NAMESPACE${NC}"
     fi

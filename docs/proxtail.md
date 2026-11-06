@@ -33,16 +33,19 @@ F5 XC → Kubernetes Service → Proxtail (Single Container StatefulSet) → Tai
   proxtail-<tailnet_name>-tailscale-egress-0
   ```
 - **Built-in Observability**:
-  - `/healthz` and `/readyz` probes on port `9000`
-  - Prometheus metrics on port `9000` (`/metrics`)
-  - Periodic traffic throughput logging
+  - Unified `/healthz` health, readiness, and Tailscale status snapshot endpoint on port `9000`
+  - On-demand pre-flight reachability and Disco path probing (`/probe`) on port `9000`
+  - Prometheus metrics on port `9000` (`/metrics`), including per-port `proxtail_port_up` gauges
+- **Zero-Downtime Hot Reload & Fault Isolation**:
+  - Automatically reloads Kubernetes `ConfigMap` updates in `< 100ms` without dropping active connections
+  - Per-tailnet fault isolation ensures an invalid or expired key on one tailnet never disrupts healthy tailnets
 
 ## Kubernetes Architecture
 
 ```
 Pod: tailscale-egress-0
 └── Container: proxtail (UID 10001)
-    ├── Health & Metrics Listener: Port 9000 (/healthz, /readyz, /metrics)
+    ├── API, Health & Metrics Listener: Port 9000 (/healthz, /probe, /metrics)
     ├── Local Port Listeners (10000, 11000, ...)
     ├── Tailnet 0 tsnet Engine (In-Memory WireGuard)
     ├── Tailnet 1 tsnet Engine (In-Memory WireGuard)
@@ -55,10 +58,9 @@ The ConfigMap generates `/etc/proxtail/config.yaml`:
 
 ```yaml
 proxy:
-  health_port: 9000
-  metrics_interval: 60
+  api_port: 9000
 tailnets:
-  - name: "tailnet0"
+  - profile: "tailnet0"
     hostname: "proxtail-tailnet0-${HOSTNAME}"
     ephemeral: true
     ports:
@@ -66,7 +68,7 @@ tailnets:
         destination: "app.tailnet0.ts.net:80"
         protocol: "tcp"
         timeout: 10
-  - name: "tailnet1"
+  - profile: "tailnet1"
     hostname: "proxtail-tailnet1-${HOSTNAME}"
     ephemeral: true
     ports:

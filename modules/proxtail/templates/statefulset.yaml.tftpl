@@ -46,7 +46,7 @@ spec:
           env:
             - name: PROXTAIL_CONFIG
               value: /etc/proxtail/config.yaml
-            - name: PROXTAIL_HEALTH_PORT
+            - name: PROXTAIL_API_PORT
               value: "9000"
             - name: TS_STATE_DIR
               value: /var/lib/tsnet
@@ -82,7 +82,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: /healthz
               port: health
             initialDelaySeconds: 3
             periodSeconds: 5

@@ -8,7 +8,7 @@
   - Single-container architecture (no sidecar container chaining)
   - Native **TCP and UDP** multi-tailnet proxying
   - Ephemeral Tailscale nodes (auto-deregisters on pod termination)
-  - Prometheus metrics (`/metrics`) and health checks (`/healthz`, `/readyz`) on port 9000
+  - Unified health/readiness (`/healthz`), pre-flight reachability probing (`/probe`), and Prometheus metrics (`/metrics`) on port 9000
 
 ## Deployment Process
 
@@ -68,8 +68,8 @@ kubectl get pods -l app=tailscale-egress -n ${k8s_namespace}
 # Check Proxtail logs
 kubectl logs -l app=tailscale-egress -c proxtail -n ${k8s_namespace}
 
-# Check health and readiness probes
-kubectl exec -it statefulset/tailscale-egress -n ${k8s_namespace} -- wget -qO- http://localhost:9000/readyz
+# Check unified health, readiness, and tailnet status
+kubectl exec -it statefulset/tailscale-egress -n ${k8s_namespace} -- wget -qO- http://localhost:9000/healthz
 
 # Port forward for testing
 %{ for tailnet_index, tailnet in tailnets ~}

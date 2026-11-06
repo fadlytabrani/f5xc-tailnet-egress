@@ -65,7 +65,7 @@ Choose the proxy architecture that best matches your application needs:
 | **Pod Footprint** | **Single container** (ultra-low CPU/memory) | $N+1$ containers (1 Envoy + $N$ Tailscale sidecars) |
 | **Protocols** | **TCP & UDP** natively supported | **TCP only** (HTTP CONNECT tunneling) |
 | **Security Context** | Unprivileged non-root (`UID 10001`), `restricted` profile | Unprivileged userspace containers |
-| **Observability** | Native `/healthz`, `/readyz`, & `/metrics` (port 9000) | Standard Envoy admin & telemetry |
+| **Observability** | Native `/healthz`, `/probe`, & `/metrics` (port 9000) | Standard Envoy admin & telemetry |
 | **Lifecycle** | Ephemeral nodes with instant clean logout (`< 150ms`) | Containerboot ephemeral lifecycle |
 
 ---
@@ -204,8 +204,8 @@ kubectl logs -l app=tailscale-egress -c proxtail -n default -f
 # For Envoy:
 kubectl logs -l app=tailscale-egress -c envoy -n default -f
 
-# Check Proxtail live health and readiness probes
-kubectl exec -it statefulset/tailscale-egress -n default -- wget -qO- http://localhost:9000/readyz
+# Check Proxtail live health, readiness, and tailnet status
+kubectl exec -it statefulset/tailscale-egress -n default -- wget -qO- http://localhost:9000/healthz
 
 # Query Prometheus metrics (Proxtail)
 kubectl exec -it statefulset/tailscale-egress -n default -- wget -qO- http://localhost:9000/metrics

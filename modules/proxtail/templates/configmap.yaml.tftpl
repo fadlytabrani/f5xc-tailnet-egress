@@ -9,11 +9,10 @@ metadata:
 data:
   config.yaml: |
     proxy:
-      health_port: 9000
-      metrics_interval: 60
+      api_port: 9000
     tailnets:
 %{ for tailnet_index, tailnet in tailnets ~}
-      - name: "${tailnet.tailnet_name}"
+      - profile: "${tailnet.tailnet_name}"
         hostname: "proxtail-${tailnet.tailnet_name}-$${HOSTNAME}"
         ephemeral: true
 %{ if tailnet.tailnet_advertise_tags != null && tailnet.tailnet_advertise_tags != "" ~}

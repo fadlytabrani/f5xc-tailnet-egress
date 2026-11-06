@@ -43,7 +43,7 @@ output "f5xc_origin_pools" {
 
 output "kubernetes_manifests" {
   description = "Generated Kubernetes manifest file paths for the active proxy"
-  value = var.proxy_type == "envoy" ? module.envoy[0].manifest_files : module.proxtail[0].manifest_files
+  value       = var.proxy_type == "envoy" ? module.envoy[0].manifest_files : module.proxtail[0].manifest_files
 }
 
 output "origin_pool_configs" {
